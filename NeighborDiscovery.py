@@ -1,0 +1,148 @@
+'''
+Created on Feb 23, 2015
+
+@author: dmitry
+'''
+
+import Messages
+import threading
+import time
+import pickle
+
+class Neighbor:
+    def __init__(self):
+        self.ip = ""
+        self.mac = ""
+        self.last_activity = time.time()
+
+class ProcessNeighbors():
+    def __init__(self, node_mac, table_obj):
+        self.table = table_obj          # Route table
+        self.neighbors_list = {}        # List of current neighbors in a form {ip, neighbor_object}
+        #self.own_ip = ip
+        
+        self.node_mac = node_mac
+        
+        self.expiry_interval = 5
+        self.last_expiry_check = time.time()
+        
+    def process_neighbor(self, data):
+        if (time.time() - self.last_expiry_check) > self.expiry_interval:
+            self.check_expired_neighbors()
+            self.last_expiry_check = time.time()
+        if data.mac == self.node_mac:
+            return False
+        if data.mac not in self.neighbors_list:
+            neighbor = Neighbor()
+            #neighbor.ip = data.ip
+            neighbor.mac = data.mac
+            self.neighbors_list[data.mac] = neighbor
+            # Adding an entry to the Route Table
+            self.add_neighbor_entry(data)
+        else:
+            self.neighbors_list[data.mac].last_activity = time.time()
+            
+        # Print current contents of the route table
+        #self.table.print_table()
+        
+    def check_expired_neighbors(self):
+        keys_to_delete = []
+        for n in self.neighbors_list:
+            if (time.time() - self.neighbors_list[n].last_activity) > self.expiry_interval:
+                keys_to_delete.append(n)
+        # Deleting from the neighbors' list
+        for k in keys_to_delete:
+            print "Neighbor has gone offline. Removing", k
+            # Deleting from the Route Table
+            self.del_neighbor_entry(self.neighbors_list[k].mac)
+            # Deleting this key from the dictionary
+            del self.neighbors_list[k]
+
+    def add_neighbor_entry(self, data):
+        # Add an entry in the route table in a form (dest_ip, dest_mac, next_hop_mac, n_hops)
+        print "Adding a new neighbor:", data.mac
+        
+        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        self.table.add_entry(data.mac, data.mac, 1)
+        
+        return True
+    
+    def del_neighbor_entry(self, mac):
+        self.table.del_entries(mac)
+        return True
+    
+class ListenNeighbors(threading.Thread):
+    def __init__(self, node_mac, table_obj, hello_msg_queue):
+        super(ListenNeighbors, self).__init__()
+        #self.port = 5000
+        self.running = True
+        self.neighbors = ProcessNeighbors(node_mac, table_obj)
+        #self.listen_socket = Transport.ReceiveTransport(self.port)
+        #self.listen_raw_socket = Transport.RawTransport(dev)
+        self.hello_msg_queue = hello_msg_queue
+        
+    def run(self):
+        while self.running:
+            data = self.hello_msg_queue.get()
+            #data = self.listen_raw_socket.recv_raw_frame()
+            #print "Received data:", data.ip, data.mac
+            #print "Neighbors list:", self.neighbors.neighbors_list
+            self.neighbors.process_neighbor(pickle.loads(data))
+            
+    def quit(self):
+        #self.listen_raw_socket.close_raw_recv_socket()
+        #self.listen_socket.close_recv_socket()
+        self.running = False
+        
+class AdvertiseNeighbor(threading.Thread):
+    def __init__(self, node_mac, raw_transport_obj):
+        super(AdvertiseNeighbor, self).__init__()
+        
+        self.message = Messages.HelloMessage()
+        self.message.mac = node_mac
+        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
+        self.dsr_header = Messages.DsrHeader()
+        self.dsr_header.type = 1                    # Type 1 corresponds to the HELLO message
+        self.dsr_header.src_mac = node_mac
+        self.dsr_header.tx_mac = node_mac
+        
+        self.running = True
+        self.broadcast_interval = 3
+        self.raw_socket = raw_transport_obj
+        
+    def run(self):
+        while self.running:
+            self.send_raw_hello()
+            time.sleep(self.broadcast_interval)
+        
+    def send_raw_hello(self):
+        #print "Sending raw HELLO message"
+        self.raw_socket.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(self.message))
+        self.message.retries += 1
+    
+    def quit(self):
+        self.running = False
+    
+class NeighborDiscovery():
+    def __init__(self, node_mac, raw_transport_obj, table_obj, hello_msg_queue):
+        self.listen_thread = ListenNeighbors(node_mac, table_obj, hello_msg_queue)
+        self.advertise_thread = AdvertiseNeighbor(node_mac, raw_transport_obj)
+        
+    def run(self):
+        self.listen_thread.start()
+        self.advertise_thread.start()
+        
+    def stop_threads(self):
+        self.listen_thread.quit()
+        self.advertise_thread.quit()
+        
+        self.listen_thread._Thread__stop()
+        self.advertise_thread._Thread__stop()
+        
+        print "NeighborDiscovery threads are stopped"
+        
+
+
+
+
+
