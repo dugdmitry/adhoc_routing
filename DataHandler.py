@@ -35,6 +35,7 @@ class AppHandler(threading.Thread):
     def run(self):
         while self.running:
             src_ip, dst_ip, raw_data = self.app_queue.get()
+            print "Packet received from app_queue"
             #print "Got data from queue:", src_ip, dst_ip, raw_data
             
             # Lookup for a corresponding dst_mac in the arp table

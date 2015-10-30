@@ -46,6 +46,10 @@ class UdsServer(threading.Thread):
         super(UdsServer, self).__init__()
         self.running = True
         self.server_address = server_address
+        # Check whether the previous uds_socket still exists on this address or not. If yes, then delete it
+        if os.path.isfile(self.server_address):
+            os.system("rm %s" % self.server_address)
+
         # Create a UDS socket
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.sock.bind(self.server_address)
@@ -159,7 +163,7 @@ class VirtualTransport():
     def get_L3_addresses_from_packet(self, packet):
         l3_id = struct.unpack("!H", packet[2:4])[0]
         
-        print "L3 PROTO ID:", hex(l3_id)
+        print "L3 PROTO ID:", hex(l3_id), packet
         
         if l3_id == int(IP4_ID):
             addresses = self.get_data_from_ipv4_header(packet)
@@ -201,6 +205,7 @@ class VirtualTransport():
     def recv_from_app(self):
         output = os.read(self.f, 65000)
         addresses = self.get_L3_addresses_from_packet(output)
+        print "Return from app_transport:", addresses + [output]
         return addresses + [output]
     
 # Class for interacting with raw sockets

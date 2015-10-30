@@ -91,6 +91,7 @@ class Routing():
             
             while True:
                 output = app_transport.recv_from_app()
+                print "Packet received from app_transport"
                 app_queue.put(output)
                 #print "Got data from app:", output
                 

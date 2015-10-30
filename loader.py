@@ -12,7 +12,7 @@ import os
 
 wd_path = "/home/dmitry/workspace_adhoc/AdhocRouting/"
 script_names = ["Node_init.py", "NeighborDiscovery.py", "DataHandler.py", "RouteTable.py", 
-                "Transport.py", "Messages.py", "PathDiscovery.py", "ip6_autoconfig.py"]
+                "Transport.py", "Messages.py", "PathDiscovery.py"]
 
 beaglebones = ["adhoc-wifi-1", "adhoc-wifi-2", "adhoc-wifi-3", "adhoc-wifi-4"]
 vms = ["adhoc1", "adhoc2", "adhoc3", "adhoc4"]

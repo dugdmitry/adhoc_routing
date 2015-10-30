@@ -77,19 +77,6 @@ class Table:
 
         print "All entries with given next_hop_mac have been removed. Table updated:"
         self.print_table()
-                                
-        #if mac in self.entries:
-        #    del self.entries[mac]
-            #entries_to_delete = []
-            #for entry in self.entries[dst_mac]:
-            #    if entry.dst_mac == dst_mac:
-            #        entries_to_delete.append(entry)
-            ## Deleting chosen entries
-            #for ent in entries_to_delete:
-            #    self.entries[dst_mac].remove(ent)
-            ## Check if that was the last existing entry. If yes -> delete the key from the dictionary
-            #if self.entries[dst_mac] == []:
-            #    del self.entries[dst_mac]
 
     # Print all entries of the route table
     def print_table(self):
