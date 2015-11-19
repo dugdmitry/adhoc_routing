@@ -15,6 +15,7 @@ import sys
 import os
 import signal
 import time
+import getpass
 
 import Queue
 
@@ -24,14 +25,24 @@ import getopt
 from conf import DEV, UDS_ADDRESS
 
 # Default paths to node settings and topology configuration
-#SETTINGS_PATH = "settings.conf"
-TOPOLOGY_PATH = "topology.conf"
+USERNAME = getpass.getuser()
+#ABSOLUTE_PATH = "/home/" + USERNAME + "/AdhocRouting/"
+ABSOLUTE_PATH = "/home/fila/AdhocRouting/"
+# Default daemon parameters.
+# File mode creation mask of the daemon.
+UMASK = 0
+REDIRECT_TO = "/dev/null"
 
+# Default maximum for the number of available file descriptors.
+MAXFD = 1024
+
+TOPOLOGY_PATH = ABSOLUTE_PATH + "topology.conf"
 UDS_PATH = "/tmp/uds_socket"
+
 
 # Class for logging everything which is printed on the screen
 class Logger(object):
-    def __init__(self, filename="routing.log"):
+    def __init__(self, filename = ABSOLUTE_PATH + "routing.log"):
         self.terminal = sys.stdout
         self.log = open(filename, "a")
 
@@ -43,9 +54,10 @@ class Logger(object):
         
     def _print(self, message):
         self.terminal.write(message)
-        
+
+
 # Routing class instance
-class Routing():
+class Routing:
     def __init__(self):
         self.node_mac = ""
         self.dev = ""
@@ -59,7 +71,7 @@ class Routing():
         # Get initial parameters from settings files
         self.get_parameters()
         # Creating a transport for communication with a virtual interface
-        app_transport = Transport.VirtualTransport()                   # "self." here is needed for setting ip addresses in real time from options
+        app_transport = Transport.VirtualTransport()
         # Creating a raw_transport object for sending DSR-like packets over the given interface
         topology_neighbors = self.get_topology_neighbors()
         raw_transport = Transport.RawTransport(self.dev, self.node_mac, topology_neighbors)
@@ -70,7 +82,7 @@ class Routing():
         # Creating a queue for handling HELLO messages from the NeighborDiscovery
         hello_msg_queue = Queue.Queue()
         # Create a Neighbor routine thread
-        neighbor_routine = NeighborDiscovery.NeighborDiscovery(self.node_mac, raw_transport, table, hello_msg_queue)
+        neighbor_routine = NeighborDiscovery.NeighborDiscovery(self.node_mac, app_transport, raw_transport, table, hello_msg_queue)
         # Create app_data handler thread
         data_handler = DataHandler.DataHandler(app_transport, app_queue, hello_msg_queue, raw_transport, table)
         # Creating thread for configuring the virtual interface
@@ -91,10 +103,8 @@ class Routing():
             
             while True:
                 output = app_transport.recv_from_app()
-                print "Packet received from app_transport"
                 app_queue.put(output)
-                #print "Got data from app:", output
-                
+
         except KeyboardInterrupt:
             data_handler.stop_threads()
             neighbor_routine.stop_threads()
@@ -112,7 +122,7 @@ class Routing():
             self.set_ipv6_address(uds_client, ipv6)
     
     def check_options(self):
-        addresses = ["", ""]                  # Adddresses' list in a format ["ipv4", "ipv6"]
+        addresses = ["", ""]                  # Addresses' list in a format ["ipv4", "ipv6"]
         try:
             opts = getopt.getopt(sys.argv[1:], "h", ["help", "set_ipv4=", "set_ipv6="])[0]
         except getopt.GetoptError:
@@ -132,7 +142,8 @@ class Routing():
     def set_ipv6_address(self, uds_client, ipv6):
         uds_client.send("ipv6-" + ipv6)                                 # "-" is a delimeter
     
-    # Get the topology neighbors of a given node from the topology_list. It is needed for correct filtering the broadcast frames sent via raw sockets.
+    # Get the topology neighbors of a given node from the topology_list.
+    # It is needed for correct filtering the broadcast frames sent via raw sockets
     def get_topology_neighbors(self):
         f = open(TOPOLOGY_PATH, "r")
         data = f.read()[:-1]
@@ -151,8 +162,9 @@ class Routing():
             string = "00:00:00:00:00:00"
         return string[:17]
 
+
 # Wraps up everything in daemon
-class RoutingDaemon():
+class RoutingDaemon:
     def __init__(self, routing):
         self.routing = routing
         self.current_pid = 0
@@ -201,20 +213,82 @@ class RoutingDaemon():
             # leader of the new process group, we call os.setsid().  The process is
             # also guaranteed not to have a controlling terminal.
             os.setsid()
-            # Create or rewrite corresponding pid-file with the new value of pid
-            self.create_pid_file(os.getpid())
-            
-            # Run the whole routing stuff
-            self.routing.run()
-            
+
+            # # Create or rewrite corresponding pid-file with the new value of pid
+            # self.create_pid_file(os.getpid())
+            # # Run the whole routing stuff
+            # self.routing.run()
+
+            try:
+                # Fork a second child and exit immediately to prevent zombies.  This
+                # causes the second child process to be orphaned, making the init
+                # process responsible for its cleanup.  And, since the first child is
+                # a session leader without a controlling terminal, it's possible for
+                # it to acquire one by opening a terminal in the future (System V-
+                # based systems).  This second fork guarantees that the child is no
+                # longer a session leader, preventing the daemon from ever acquiring
+                # a controlling terminal.
+                pid = os.fork()	# Fork a second child.
+            except OSError, e:
+                raise Exception, "%s [%d]" % (e.strerror, e.errno)
+
+            if (pid == 0):	# The second child.
+                # Since the current working directory may be a mounted filesystem, we
+                # avoid the issue of not being able to unmount the filesystem at
+                # shutdown time by changing it to the root directory.
+                os.chdir(ABSOLUTE_PATH)
+                # We probably don't want the file mode creation mask inherited from
+                # the parent, so we give the child complete control over permissions.
+                os.umask(UMASK)
+
+            else:
+                # exit() or _exit()?  See below.
+                os._exit(0)	# Exit parent (the first child) of the second child.
+
         else:
             os._exit(0)    # Exit parent of the first child.
-            
+
+        # Iterate through and close all file descriptors.
+        for fd in range(0, MAXFD):
+            try:
+                os.close(fd)
+            except OSError:	# ERROR, fd wasn't open to begin with (ignored)
+                pass
+
+        # Redirect the standard I/O file descriptors to the specified file.  Since
+        # the daemon has no controlling terminal, most daemons redirect stdin,
+        # stdout, and stderr to /dev/null.  This is done to prevent side-effects
+        # from reads and writes to the standard I/O file descriptors.
+
+        # This call to open is guaranteed to return the lowest file descriptor,
+        # which will be 0 (stdin), since it was closed above.
+        # REDIRECT_TO = "/tmp/output.log"
+        # REDIRECT_TO = "/dev/null"
+
+        # ## Make an error redirection of a single program execution to the output file ## #
+        REDIRECT_TO = "/tmp/output.log"
+        f = open(REDIRECT_TO, "w")
+        f.write("\n" + "-" * 100 + "\n")
+        f.close()
+        self.fout = os.open(REDIRECT_TO, os.O_RDWR)	# standard input (0)
+
+        # Duplicate standard input to standard output and standard error.
+        os.dup2(0, 1)			# standard output (1)
+        os.dup2(0, 2)			# standard error (2)
+
+        # Create or rewrite corresponding pid-file with the new value of pid
+        self.create_pid_file(os.getpid())
+        # Create logger
+        # Logging everything to a file
+        sys.stdout = Logger()
+        # Run the whole routing stuff
+        self.routing.run()
+
     def start(self):
         # Check whether the daemon is already running or not
         running = self.check_current_pid()
         if running:
-            sys.stdout._print("The previous process is still running! Do nothing.\n")
+            print("The previous process is still running! Do nothing.\n")
             return 0
         else:
             # Create and run routing daemon
@@ -224,33 +298,33 @@ class RoutingDaemon():
         # Check whether the daemon is already running or not
         running = self.check_current_pid()
         if running:
-            sys.stdout._print("Sending CTRL-C to the process...\n")
+            print("Sending CTRL-C to the process...")
             os.kill(self.current_pid, signal.SIGINT)
         else:
-            sys.stdout._print("The process does not exist. Nothing to stop here.\n")
+            print("The process does not exist. Nothing to stop here.\n")
     
     def restart(self):
         # Check whether the daemon is already running or not
         running = self.check_current_pid()
         if running:
-            sys.stdout._print("Found the process. Terminating it.\n")
+            print("Found the process. Terminating it.\n")
             os.kill(self.current_pid, signal.SIGINT)
             time.sleep(0.2)
-            sys.stdout._print("Starting the process.\n")
+            print("Starting the process.\n")
             self.create_daemon()
         else:
-            sys.stdout._print("No process found. Starting a new one.\n")
+            print("No process found. Starting a new one.\n")
             self.create_daemon()
-            
+
 if __name__ == "__main__":
-    # Logging everything to a file
-    sys.stdout = Logger()
-    ### Creating routing and daemon instances ###
+    # # Logging everything to a file
+    # sys.stdout = Logger()
+    # ## Creating routing and daemon instances ## #
     routing = Routing()
     daemon = RoutingDaemon(routing)
     # Creating unix domain client for sending commands
     uds_client = Transport.UdsClient(UDS_ADDRESS)
-    ### Correctly parse input arguments and options ###
+    # ## Correctly parse input arguments and options ## #
     try:
         opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "set_ipv4=", "set_ipv6="])
     except getopt.GetoptError:
@@ -266,7 +340,7 @@ if __name__ == "__main__":
             elif "restart" == args[0]:
                 daemon.restart()
             else:
-                sys.stdout._print("Unknown command.\n")
+                print("Unknown command.\n")
         # If an option is set, assign the given ip address to the app_trasport
         else:
             for opt, arg in opts:
@@ -294,11 +368,7 @@ if __name__ == "__main__":
                         print "The daemon is not running!"
                 
     else:
-        sys.stdout._print("Usage: %s [options] start|stop|restart\n" % sys.argv[0])
-    
-    
-    
-    
-    
-    
-        
+        print("Usage: %s [options] start|stop|restart\n" % sys.argv[0])
+
+
+

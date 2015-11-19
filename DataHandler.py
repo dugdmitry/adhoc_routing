@@ -11,94 +11,113 @@ import PathDiscovery
 import Queue
 import pickle
 import threading
+from collections import deque
+
 lock = threading.Lock()
 
+
 class AppHandler(threading.Thread):
-    def __init__(self, app_queue, wait_queue, raw_transport, table):
+    def __init__(self, app_queue, wait_queue, raw_transport, table, broadcast_list):
         super(AppHandler, self).__init__()
         self.running = True
         self.app_queue = app_queue
         self.wait_queue = wait_queue
         self.table = table
+        self.broadcast_list = broadcast_list
         
         self.transport = raw_transport
         self.node_mac = table.node_mac
-        
-        # Create a dsr_header object template
-        self.dsr_header = Messages.DsrHeader()
-        self.dsr_header.type = 0                    # Type 0 corresponds to the data packets
-        self.dsr_header.src_mac = self.node_mac
-        self.dsr_header.tx_mac = self.node_mac
         
         self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
         
     def run(self):
         while self.running:
             src_ip, dst_ip, raw_data = self.app_queue.get()
-            print "Packet received from app_queue"
-            #print "Got data from queue:", src_ip, dst_ip, raw_data
-            
+
             # Lookup for a corresponding dst_mac in the arp table
             dst_mac = self.table.lookup_mac_address(dst_ip)
             
             # Check whether the destination IP exists in the Route Table
             entry = self.table.lookup_entry(dst_mac)
-            
-            
-            print "DEST_IP:", dst_ip, dst_ip[:2]
+
+            # print "DEST_IP:", dst_ip
             
             if dst_ip[:2] == "ff" or dst_ip == "10.0.0.255":
-                print "Multicast IPv6", dst_ip                                  ### IPv4 PACKETS GO UNCHECKED FOR NOW ###
-                # Forward it further to the network
-                self.dsr_header.dst_mac = self.broadcast_mac
-                self.transport.send_raw_frame(self.broadcast_mac, self.dsr_header, raw_data)                
-                
+                print "Multicast IPv6", dst_ip                              # ## IPv4 PACKETS GO UNCHECKED FOR NOW ## #
+                # Create a broadcast dsr header
+                dsr_header = self.create_dsr_broadcast_header()
+                # Put the dsr broadcast id to the broadcast_list
+                self.broadcast_list.append(dsr_header.broadcast_id)
+
+                # print "Trying to send the broadcast..."
+
+                # Broadcast it further to the network
+                self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+
+                # print "Broadcast sent!!!"
+
             elif entry is None:
                 print "No such route in the table. Starting route discovery..."
-                ### Start PathDiscovery procedure ###
+                # ## Start PathDiscovery procedure ## #
                 # Put packet in wait_queue
                 self.wait_queue.put([src_ip, dst_ip, raw_data])
-            
-            #elif dst_ip[:2] == "ff":                                # If the first 2 bytes are "ff" -> then the IPv6 packet is multicast
-            #    print "Multicast IPv6", dst_ip                                  ### IPv4 PACKETS GO UNCHECKED FOR NOW ###
-            #    # Forward it further to the network
-            #    self.dsr_header.dst_mac = self.broadcast_mac
-            #    self.transport.send_raw_frame(self.broadcast_mac, self.dsr_header, raw_data)
                 
             else:
-                #print "Found an entry:"
-                #self.table.print_entry(entry)
+                # print "Found an entry:"
+                # self.table.print_entry(entry)
                 next_hop_mac = entry.next_hop_mac
-                
-                # Form a dsr_header.dst_mac with proper value
-                self.dsr_header.dst_mac = dst_mac
-
+                # Create a unicast dsr header with proper values
+                dsr_header = self.create_dsr_unicast_header(dst_mac)
                 # Send the raw data with dsr_header to the next hop
-                self.transport.send_raw_frame(next_hop_mac, self.dsr_header, raw_data)
-                
+                self.transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
+
+        print "LOOP FINISHED!!!"
+
+    def create_dsr_unicast_header(self, dst_mac):
+        _type = 0                                       # Type 0 corresponds to the data packets
+        dsr_header = Messages.DsrHeader(_type)
+        dsr_header.src_mac = self.node_mac
+        dsr_header.dst_mac = dst_mac
+        dsr_header.tx_mac = self.node_mac
+        return dsr_header
+
+    def create_dsr_broadcast_header(self):
+        _type = 4                                       # Type 4 corresponds to the broadcast packets
+        dsr_header = Messages.DsrHeader(_type)
+        dsr_header.src_mac = self.node_mac
+        dsr_header.tx_mac = self.node_mac
+        dsr_header.broadcast_ttl = 1
+        return dsr_header
+
     def quit(self):
         self.running = False
 
+
 # Wrapping class for starting app_handler and incoming_data_handler threads
-class DataHandler():
+class DataHandler:
     def __init__(self, app_transport, app_queue, hello_msg_queue, raw_transport, table):
-        ## Creating a socket object for exchanging service messages
-        #service_transport = Transport.ServiceTransport(table.node_ip, 3001)
+        # ## Creating a socket object for exchanging service messages
+        # service_transport = Transport.ServiceTransport(table.node_ip, 3001)
         # Creating a queue for receiving RREPs
         rrep_queue = Queue.Queue()
         # Creating a queue for the delayed packets waiting for rrep message
         wait_queue = Queue.Queue()
         # Creating a queue for handling incoming RREQ and RREP packets from the raw_socket
         service_msg_queue = Queue.Queue()
-        
+        # Creating a deque list for keeping the received broadcast IDs
+        broadcast_list = deque(maxlen=1000000)  # Limit the max length of the list
+
         # Creating thread objects
         self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue, rrep_queue, raw_transport)
         
-        self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport, table)
+        self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport, table, broadcast_list)
         
         self.service_messages_handler_thread = ServiceMessagesHandler(table, app_transport, raw_transport, rrep_queue, service_msg_queue)
         
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue, hello_msg_queue, app_transport, raw_transport, table)
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue,
+                                                                      hello_msg_queue, app_transport,
+                                                                      raw_transport, table, broadcast_list)
+
     # Starting the threads
     def run(self):
         self.app_handler_thread.start()
@@ -119,8 +138,10 @@ class DataHandler():
         
         print "Traffic handlers are stopped"
 
+
 class IncomingTrafficHandler(threading.Thread):
-    def __init__(self, app_queue, service_msg_queue, hello_msg_queue, app_transport, raw_transport, table):
+    def __init__(self, app_queue, service_msg_queue, hello_msg_queue,
+                 app_transport, raw_transport, table, broadcast_list):
         super(IncomingTrafficHandler, self).__init__()
         self.running = True
         self.app_transport = app_transport
@@ -129,56 +150,88 @@ class IncomingTrafficHandler(threading.Thread):
         self.service_msg_queue = service_msg_queue
         self.hello_msg_queue = hello_msg_queue
         self.table = table
+        self.broadcast_list = broadcast_list
         self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
+        self.max_broadcast_ttl = 1              # Set a maximum number of hops a broadcast frame can be forwarded over
         
     def run(self):
         while self.running:
+
             dsr_header, raw_data = self.raw_transport.recv_data()
-            dst_mac = dsr_header.dst_mac
+
             dsr_type = dsr_header.type
-            #print "Received data from lower interface:", src_ip, dst_ip
-            # Check the dst_ip from dsr_header. If it matches the node's own ip -> send it up to the virtual interface            
-            # If the the packet carries the data, either send it to the next hop, or, if there is no such one, put it to the AppQueue
+            # print "Received data from lower interface:", src_ip, dst_ip
+
+            # Check the dst_ip from dsr_header. If it matches the node's own ip -> send it up to the virtual interface
+            # If the packet carries the data, either send it to the next hop, or,
+            # if there is no such one, put it to the AppQueue, or,
+            # if the dst_mac equals to the node's mac, send the packet up to the application
             if dsr_type == 0:
+                dst_mac = dsr_header.dst_mac
                 # If the dst_ip matches the node's ip, send data to the App
                 if dst_mac == self.table.node_mac:
-                    #print "Sending data to the App..."
+                    # print "Sending data to the App..."
                     self.send_up(raw_data)
-                elif dst_mac == self.broadcast_mac:
-                    # Send the ipv4 broadcast/multicast or ipv6 multicast packet up to the application
-                    self.send_up(raw_data)
-                    
+                # elif dst_mac == self.broadcast_mac:
+                #     # Send the ipv4 broadcast/multicast or ipv6 multicast packet up to the application
+                #     self.send_up(raw_data)
+
                 # Else, try to find the next hop in the route table
                 else:
-                    
                     entry = self.table.lookup_entry(dst_mac)
                     # If no entry is found, put the packet to the initial AppQueue
                     if entry is None:
                         # Get src_ip and dst_ip from the raw_data
                         ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
                         self.app_queue.put([ips[0], ips[1], raw_data])
-                        
+
                     # Else, forward the packet to the next_hop
                     else:
                         next_hop_mac = entry.next_hop_mac
                         # Send the raw data with dsr_header to the next hop
                         self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
-            
-            # If the dsr packet contains service/control information
+
+            # If the dsr packet contains HELLO message from the neighbour
             elif dsr_type == 1:
                 # Handle HELLO message
                 self.hello_msg_queue.put(raw_data)
-            
+
+            # If the dsr packet contains RREQ or RREQ service messages
             elif dsr_type == 2 or dsr_type == 3:
                 # Handle RREQ / RREP
                 self.service_msg_queue.put([dsr_header, raw_data])
-                
+
+            # If the packet is the broadcast one, either broadcast it further or drop it
+            elif dsr_type == 4:
+                # print "Received broadcast TTL:", dsr_header.broadcast_ttl
+                # Check whether the packet with this particular broadcast_id has been previously received
+                if dsr_header.broadcast_id in self.broadcast_list:
+                    # print "Dropped broadcast id:", dsr_header.broadcast_id
+                    # Just ignore it
+                    # print "Ignoring the broadcast"
+                    pass
+                # Check whether the broadcast packet has reached the maximum established broadcast ttl
+                elif dsr_header.broadcast_ttl > self.max_broadcast_ttl:
+                    # Just ignore it
+                    # print "Ignoring the broadcast"
+                    pass
+                else:
+                    # print "Accepting the broadcast"
+                    # Send this ipv4 broadcast/multicast or ipv6 multicast packet up to the application
+                    self.send_up(raw_data)
+                    # Put it to the broadcast list
+                    self.broadcast_list.append(dsr_header.broadcast_id)
+                    # Increment broadcast ttl and send the broadcast the packet further
+                    dsr_header.broadcast_ttl += 1
+                    self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+
     # Send the raw data up to virtual interface
     def send_up(self, raw_data):
         self.app_transport.send_to_app(raw_data)
         
     def quit(self):
         self.running = False
+
 
 class ServiceMessagesHandler(threading.Thread):
     def __init__(self, route_table, app_transport, raw_transport, rrep_queue, service_msg_queue):
@@ -189,7 +242,7 @@ class ServiceMessagesHandler(threading.Thread):
         self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
         self.node_mac = route_table.node_mac
         self.service_msg_queue = service_msg_queue
-        self.rrep_queue = rrep_queue                        # Store the received RREP in queue for further handling by Path_Discovery thread
+        self.rrep_queue = rrep_queue  # Store the received RREP in queue for further handling by Path_Discovery thread
         
         self.rreq_ids = []
         self.running = True
@@ -225,8 +278,7 @@ class ServiceMessagesHandler(threading.Thread):
                 self.RREP_handler(dsr_header, data)
                 
     def gen_dsr_header(self, dsr_header, _type):
-        dsr = Messages.DsrHeader()
-        dsr.type = _type
+        dsr = Messages.DsrHeader(_type)
         dsr.src_mac = self.node_mac
         dsr.dst_mac = dsr_header.src_mac
         dsr.tx_mac = self.node_mac
@@ -287,7 +339,8 @@ class ServiceMessagesHandler(threading.Thread):
     def RREP_handler(self, dsr_header, RREP):
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
-        entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
         # Update arp_table
         self.table.update_arp_table(RREP.src_ip, dsr_header.src_mac)
         self.table.update_arp_table(RREP.dst_ip, dsr_header.dst_mac)
@@ -315,4 +368,4 @@ class ServiceMessagesHandler(threading.Thread):
             print "This RREP is for me. Stop the discovery procedure, send the data.\n"
             # Put RREP in rrep_queue
             self.rrep_queue.put(RREP.src_ip)
-            
+

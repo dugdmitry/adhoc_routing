@@ -7,15 +7,10 @@ Created on Sep 30, 2014
 
 from time import time
 
+
 class Entry:
     def __init__(self, dst_mac, next_hop_mac, n_hops):
-        
-        
-        #self.source_ip = source_ip                                  # Source IP address
-        #self.dest_ip = dest_ip                                      # Destination IP address
-        #self.next_hop_ip = next_hop_ip                              # Next hop ip address
-        
-        
+
         self.dst_mac = dst_mac                                      # MAC address of destination node
         self.next_hop_mac = next_hop_mac                            # Next hop mac address
         self.n_hops = n_hops                                        # Number of hops to destination
@@ -24,11 +19,12 @@ class Entry:
         
     def __eq__(self, other):
         return (self.dst_mac == other.dst_mac and self.next_hop_mac == other.next_hop_mac and self.n_hops == other.n_hops)
-    
+
+
 class Table:
     def __init__(self, node_mac):
-        self.entries = {}                     # List of entries
-        self.arp_table = {}                   # A dictionary which maps current IP addresses with the devices' MAC addresses
+        self.entries = {}                 # List of entries
+        self.arp_table = {}               # A dictionary which maps current IP addresses with the devices' MAC addresses
         self.node_mac = node_mac
         
     # Add an entry to the route table and the arp_table
@@ -40,7 +36,7 @@ class Table:
             for ent in self.entries[dst_mac]:
                 # If yes, replace it with the new one and return it
                 if ent == entry:
-                    ent = entry
+                    ent = entry             # TODO: Fix the entry replacement method
                     return entry
             
             self.entries[dst_mac].append(entry)
@@ -53,15 +49,15 @@ class Table:
         return entry
     
     def update_arp_table(self, ip, mac):
-            self.arp_table.update({ip : mac})
+            self.arp_table.update({ip: mac})
     
     # Delete all entries where next_hop_mac matches the given mac
     def del_entries(self, mac):
         entries_to_delete = {}
         for dst_mac in self.entries:
-            entries_to_delete.update({dst_mac : []})
+            entries_to_delete.update({dst_mac: []})
 
-            #entries_to_delete = []
+            # entries_to_delete = []
 
             for entry in self.entries[dst_mac]:
                 if entry.next_hop_mac == mac:
@@ -91,7 +87,7 @@ class Table:
     def print_entry(self, entry):
         print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
         print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
-        
+
     # Returns an entry with a given dest_ip and ID
     def get_entry_by_ID(self, dest_ip, ID):
         IDs = []
@@ -139,14 +135,13 @@ class Table:
             for ent in self.entries[dst_mac]:
                 if (time() - ent.last_activity) > ent.timeout:
                     entries_to_delete.append(ent)
-                    #self.entries[dst_mac].remove(ent)
+                    # self.entries[dst_mac].remove(ent)
             for ent in entries_to_delete:
                 self.entries[dst_mac].remove(ent)
             # If the list becomes empty, then delete it
             if self.entries[dst_mac] == []:
                 del self.entries[dst_mac]
-                    
+
         else:
             print "This should never happen: RouteTable.check_expiry(dst_mac)"
-            
-    
+

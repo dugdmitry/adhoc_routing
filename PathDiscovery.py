@@ -10,6 +10,7 @@ import threading
 import pickle
 import Messages
 
+
 class PathDiscoveryHandler(threading.Thread):
     def __init__(self, app_queue, wait_queue, rrep_queue, raw_transport):
         super(PathDiscoveryHandler, self).__init__()
@@ -19,6 +20,7 @@ class PathDiscoveryHandler(threading.Thread):
         self.running = True
         self.raw_transport = raw_transport
         self.node_mac = raw_transport.node_mac
+
         # Starting a thread for handling incoming RREP requests
         self.rrep_handler_thread = RrepHandler(app_queue, rrep_queue, self.rreq_list, self.rreq_thread_list)
         self.rrep_handler_thread.start()
@@ -44,6 +46,7 @@ class PathDiscoveryHandler(threading.Thread):
         for i in self.rreq_thread_list:
             self.rreq_thread_list[i].quit()
 
+
 # A routine thread for periodically broadcasting RREQs
 class RreqRoutine(threading.Thread):
     def __init__(self, raw_transport, rreq_list, rreq_thread_list, src_ip, dst_ip, node_mac):
@@ -56,10 +59,10 @@ class RreqRoutine(threading.Thread):
         self.dst_ip = dst_ip
         self.node_mac = node_mac
         self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
-        self.dsr_header = Messages.DsrHeader()
+        self.dsr_header = Messages.DsrHeader(2)       # Type 2 corresponds to RREQ service message
         self.max_retries = 3
         self.interval = 1
-        
+
     def run(self):
         count = 0
         while self.running:
@@ -84,20 +87,18 @@ class RreqRoutine(threading.Thread):
         RREQ.dsn = 1
         RREQ.hop_count = 1
         
-        print "New  RREQ for IP: '%s' has been sent. Waiting for RREP" % self.dst_ip
-        
         # Prepare a dsr_header
-        self.dsr_header.type = 2                                                # Type 2 corresponds to RREQ service message
         self.dsr_header.src_mac = self.node_mac
         self.dsr_header.tx_mac = self.node_mac
         
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(RREQ))
-        
-        #self.service_transport.broadcast_send(RREQ)
+
+        print "New  RREQ for IP: '%s' has been sent. Waiting for RREP" % self.dst_ip
         
     def quit(self):
         self.running = False
         self._Thread__stop()
+
 
 # Class for handling incoming RREP messages
 class RrepHandler(threading.Thread):
