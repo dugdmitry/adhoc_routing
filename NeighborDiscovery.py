@@ -1,13 +1,28 @@
-'''
+#!/usr/bin/python
+"""
 Created on Feb 23, 2015
 
 @author: dmitry
-'''
+"""
 
 import Messages
 import threading
 import time
 import pickle
+
+import logging
+import routing_logging
+
+# Set logging level
+LOG_LEVEL = logging.INFO
+# Set up logging
+# neighbor_log_handler = routing_logging.create_routing_handler("routing.neighbor_discovery.log", LOG_LEVEL)
+# NEIGHBOR_LOG = logging.getLogger("root.neighbor_discovery")
+# NEIGHBOR_LOG.setLevel(LOG_LEVEL)
+# NEIGHBOR_LOG.addHandler(neighbor_log_handler)
+
+NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery", LOG_LEVEL)
+# NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "root.neighbor_discovery", LOG_LEVEL)
 
 
 class Neighbor:
@@ -53,6 +68,9 @@ class ProcessNeighbors:
         f = open("neighbors_file", "w")
         for mac in self.neighbors_list:
             # print "Neighbor's IPs:", self.neighbors_list[mac].l3_addresses
+
+            NEIGHBOR_LOG.debug("Neighbor's IPs: %s", str(self.neighbors_list[mac].l3_addresses))
+
             for addr in self.neighbors_list[mac].l3_addresses:
                 if addr:
                     f.write(addr)
@@ -66,7 +84,10 @@ class ProcessNeighbors:
                 keys_to_delete.append(n)
         # Deleting from the neighbors' list
         for k in keys_to_delete:
-            print "Neighbor has gone offline. Removing", k
+            # print "Neighbor has gone offline. Removing", k
+
+            NEIGHBOR_LOG.info("Neighbor has gone offline. Removing: %s", str(k))
+
             # Deleting from the Route Table
             self.del_neighbor_entry(self.neighbors_list[k].mac)
             # Deleting this key from the dictionary
@@ -74,7 +95,9 @@ class ProcessNeighbors:
 
     def add_neighbor_entry(self, data):
         # Add an entry in the route table in a form (dest_mac, next_hop_mac, n_hops)
-        print "Adding a new neighbor:", data.mac
+        # print "Adding a new neighbor:", data.mac
+
+        NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(data.mac))
         
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
         self.table.add_entry(data.mac, data.mac, 1)
@@ -102,6 +125,7 @@ class ListenNeighbors(threading.Thread):
             # data = self.listen_raw_socket.recv_raw_frame()
             # print "Received data:", data.ip, data.mac
             # print "Neighbors list:", self.neighbors.neighbors_list
+
             self.neighbors.process_neighbor(pickle.loads(data))
             
     def quit(self):
@@ -137,6 +161,9 @@ class AdvertiseNeighbor(threading.Thread):
         self.message.l3_addresses = node_ips
 
         # print "Sending raw HELLO message"
+
+        NEIGHBOR_LOG.info("Sending raw HELLO message")
+
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(self.message))
         self.message.retries += 1
     
@@ -160,5 +187,7 @@ class NeighborDiscovery:
         self.listen_thread._Thread__stop()
         self.advertise_thread._Thread__stop()
         
-        print "NeighborDiscovery threads are stopped"
+        # print "NeighborDiscovery threads are stopped"
+
+        NEIGHBOR_LOG.info("NeighborDiscovery threads are stopped")
 

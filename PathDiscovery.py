@@ -1,14 +1,29 @@
 #!/usr/bin/python
-'''
+"""
 Created on Oct 8, 2014
 
 @author: Dmitrii
-'''
+"""
 
 import time
 import threading
 import pickle
 import Messages
+
+import logging
+import routing_logging
+
+
+# Set logging level
+LOG_LEVEL = logging.DEBUG
+# Set up logging
+# path_discovery_log_handler = routing_logging.create_routing_handler("routing.path_discovery.log", LOG_LEVEL)
+# PATH_DISCOVERY_LOG = logging.getLogger("root.path_discovery")
+# PATH_DISCOVERY_LOG.setLevel(LOG_LEVEL)
+# PATH_DISCOVERY_LOG.addHandler(path_discovery_log_handler)
+
+PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery", LOG_LEVEL)
+# PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "root.path_discovery", LOG_LEVEL)
 
 
 class PathDiscoveryHandler(threading.Thread):
@@ -71,7 +86,10 @@ class RreqRoutine(threading.Thread):
                 time.sleep(self.interval)
             else:
                 # Max retries reached. Delete corresponding packets from rreq_list, stop the thread
-                print "Maximum retries reached!!! Deleting the thread..."
+                # print "Maximum retries reached!!! Deleting the thread..."
+
+                PATH_DISCOVERY_LOG.info("Maximum retries reached!!! Deleting the thread...")
+
                 del self.rreq_list[self.dst_ip]
                 del self.rreq_thread_list[self.dst_ip]
                 # Stop the thread
@@ -93,7 +111,9 @@ class RreqRoutine(threading.Thread):
         
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(RREQ))
 
-        print "New  RREQ for IP: '%s' has been sent. Waiting for RREP" % self.dst_ip
+        # print "New  RREQ for IP: '%s' has been sent. Waiting for RREP" % self.dst_ip
+
+        PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", str(self.dst_ip))
         
     def quit(self):
         self.running = False
@@ -113,6 +133,11 @@ class RrepHandler(threading.Thread):
     def run(self):
         while self.running:
             src_ip = self.rrep_queue.get()
+
+            # print "Got RREP. Deleting RREQ thread..."
+
+            PATH_DISCOVERY_LOG.info("Got RREP. Deleting RREQ thread...")
+
             # Get the packets from the rreq_list
             data = self.rreq_list[src_ip]
             thread = self.rreq_thread_list[src_ip]
@@ -122,8 +147,12 @@ class RrepHandler(threading.Thread):
             del self.rreq_thread_list[src_ip]
             # Send the packets back to original app_queue
             for packet in data:
-                #print "Putting delayed packets in app_queue:"
-                #print packet
+                # print "Putting delayed packets in app_queue:"
+                # print packet
+
+                PATH_DISCOVERY_LOG.info("Putting delayed packets in app_queue...")
+                PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet[1]))
+
                 self.app_queue.put(packet)
                 
     def quit(self):

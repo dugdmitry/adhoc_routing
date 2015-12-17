@@ -6,6 +6,20 @@ Created on Sep 30, 2014
 '''
 
 from time import time
+import logging
+import routing_logging
+
+
+# Set logging level
+LOG_LEVEL = logging.DEBUG
+# Set up logging
+# table_log_handler = routing_logging.create_routing_handler("routing.route_table.log", LOG_LEVEL)
+# TABLE_LOG = logging.getLogger("root.route_table")
+# TABLE_LOG.setLevel(LOG_LEVEL)
+# TABLE_LOG.addHandler(table_log_handler)
+
+TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table", LOG_LEVEL)
+# TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "root.route_table", LOG_LEVEL)
 
 
 class Entry:
@@ -15,10 +29,18 @@ class Entry:
         self.next_hop_mac = next_hop_mac                            # Next hop mac address
         self.n_hops = n_hops                                        # Number of hops to destination
         self.last_activity = time()                                 # Timestamp of the last activity
-        self.timeout = 240                                          # Timeout in seconds upon deleting an entry
+        self.timeout = 60                                          # Timeout in seconds upon deleting an entry
         
     def __eq__(self, other):
-        return (self.dst_mac == other.dst_mac and self.next_hop_mac == other.next_hop_mac and self.n_hops == other.n_hops)
+        return (self.dst_mac == other.dst_mac and
+                self.next_hop_mac == other.next_hop_mac and self.n_hops == other.n_hops)
+
+    def __str__(self):
+        out_tuple = (str(self.dst_mac), str(self.next_hop_mac),
+                     str(self.n_hops), str(round((time() - self.last_activity), 2)))
+        out_string = "DST_MAC: %s, NEXT_HOP_MAC: %s, N_HOPS: %s, IDLE_TIME: %s" % out_tuple
+
+        return out_string
 
 
 class Table:
@@ -34,17 +56,20 @@ class Table:
         if dst_mac in self.entries:
             # Check if the identical entry already exists in the table
             for ent in self.entries[dst_mac]:
-                # If yes, replace it with the new one and return it
+                # If yes, just refresh its last_activity time and return it
                 if ent == entry:
-                    ent = entry             # TODO: Fix the entry replacement method
-                    return entry
+                    ent.last_activity = time()
+                    return ent
             
             self.entries[dst_mac].append(entry)
             
         else:
             self.entries[dst_mac] = [entry]
             # Print the route table
-            print "New entry has been added. Table updated:"
+            # print "New entry has been added. Table updated."
+
+            TABLE_LOG.info("New entry has been added. Table updated.")
+
             self.print_table()
         return entry
     
@@ -71,22 +96,40 @@ class Table:
             if self.entries[dst_mac] == []:
                 del self.entries[dst_mac]
 
-        print "All entries with given next_hop_mac have been removed. Table updated:"
+        # print "All entries with given next_hop_mac have been removed. Table updated."
+
+        TABLE_LOG.info("All entries with given next_hop_mac have been removed. Table updated.")
+
         self.print_table()
 
-    # Print all entries of the route table
+    # # Print all entries of the route table to a file
+    # def print_table(self):
+    #     print "-" * 90
+    #     for dst_mac in self.entries:
+    #         print "Towards destination MAC:", dst_mac
+    #         print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
+    #         for entry in self.entries[dst_mac]:
+    #             print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
+    #     print "-" * 90
+
+    # def print_entry(self, entry):
+    #     print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
+    #     print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
+
+    # Print all entries of the route table to a file
     def print_table(self):
-        print "-" * 90
+        f = open("table.txt", "w")
+        f.write("-" * 90)
         for dst_mac in self.entries:
-            print "Towards destination MAC:", dst_mac
-            print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
+            f.write("Towards destination MAC: %s \n" % dst_mac)
+            f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>")
             for entry in self.entries[dst_mac]:
-                print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
-        print "-" * 90
-        
+                f.write("entry.dst_mac \t entry.next_hop_mac \t     entry.n_hops \t\t     " + str(round((time() - entry.last_activity), 2)))
+        f.write("-" * 90)
+
     def print_entry(self, entry):
-        print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
-        print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
+        TABLE_LOG.info("<Dest_MAC>: %s, <Next_hop_MAC>: %s, <Hop_count>: %s, <IDLE Time>: %s",
+                       entry.dst_mac, entry.next_hop_mac, entry.n_hops, round((time() - entry.last_activity), 2))
 
     # Returns an entry with a given dest_ip and ID
     def get_entry_by_ID(self, dest_ip, ID):
@@ -94,7 +137,7 @@ class Table:
         if dest_ip in self.entries:
             for d in self.entries[dest_ip]:
                 IDs.append(d.id)
-                
+
         return self.entries[dest_ip][IDs.index(ID)]
     
     # Check the dst_ip in arp_table and in the route_table
@@ -145,3 +188,4 @@ class Table:
         else:
             print "This should never happen: RouteTable.check_expiry(dst_mac)"
 
+            TABLE_LOG.warning("This should never happen: RouteTable.check_expiry(dst_mac)")

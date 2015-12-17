@@ -16,6 +16,12 @@ class RouteRequest:
         self.dsn = 0
         self.hop_count = 0
 
+    def __str__(self):
+        out_tuple = (str(self.id), str(self.src_ip), str(self.dst_ip), str(self.dsn), str(self.hop_count))
+        out_string = "ID: %s, SRC_IP: %s, DST_IP: %s, DSN: %s, HOP_COUNT: %s" % out_tuple
+
+        return out_string
+
 
 class RouteReply:
     def __init__(self):
@@ -24,6 +30,12 @@ class RouteReply:
         self.dst_ip = ""
         self.dsn = 0
         self.hop_count = 0
+
+    def __str__(self):
+        out_tuple = (str(self.id), str(self.src_ip), str(self.dst_ip), str(self.dsn), str(self.hop_count))
+        out_string = "ID: %s, SRC_IP: %s, DST_IP: %s, DSN: %s, HOP_COUNT: %s" % out_tuple
+
+        return out_string
 
 
 class HelloMessage:
@@ -54,7 +66,6 @@ class DsrHeader:
         # !!! Hopefully, will be fixed later !!! #
         if self.type == 4:
             self.header_format = DsrHeader.broadcast_header_format
-            # self.length = struct.calcsize(self.header_format)
             self.src_mac = "00:00:00:00:00:00"
             self.tx_mac = "00:00:00:00:00:00"
             self.broadcast_id = randint(1, 1000000)
@@ -63,7 +74,16 @@ class DsrHeader:
             # DsrHeader.broadcast_id_counter += 1
         else:
             self.header_format = DsrHeader.unicast_header_format
-            # self.length = struct.calcsize(self.header_format)
             self.src_mac = "00:00:00:00:00:00"
             self.dst_mac = "00:00:00:00:00:00"
             self.tx_mac = "00:00:00:00:00:00"
+
+    def __str__(self):
+        if self.type == 4:
+            out_tuple = (str(self.src_mac), str(self.tx_mac), str(self.broadcast_id), str(self.broadcast_ttl))
+            out_string = "SRC_MAC: %s, TX_MAC: %s, BROADCAST_ID: %s, BROADCAST_TTL: %s" % out_tuple
+            return out_string
+        else:
+            out_tuple = (str(self.src_mac), str(self.dst_mac), str(self.tx_mac))
+            out_string = "SRC_MAC: %s, DST_MAC: %s, TX_MAC: %s" % out_tuple
+            return out_string
