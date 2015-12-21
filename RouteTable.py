@@ -102,30 +102,21 @@ class Table:
 
         self.print_table()
 
-    # # Print all entries of the route table to a file
-    # def print_table(self):
-    #     print "-" * 90
-    #     for dst_mac in self.entries:
-    #         print "Towards destination MAC:", dst_mac
-    #         print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
-    #         for entry in self.entries[dst_mac]:
-    #             print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
-    #     print "-" * 90
-
-    # def print_entry(self, entry):
-    #     print "<Dest_MAC>", "\t\t<Next_hop_MAC>", "\t\t<Hop_count>", "\t<IDLE Time>"
-    #     print entry.dst_mac, "\t", entry.next_hop_mac, "\t    ", entry.n_hops, "\t\t    ", round((time() - entry.last_activity), 2)
-
     # Print all entries of the route table to a file
     def print_table(self):
         f = open("table.txt", "w")
-        f.write("-" * 90)
+        f.write("-" * 90 + "\n")
         for dst_mac in self.entries:
             f.write("Towards destination MAC: %s \n" % dst_mac)
-            f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>")
+            f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>\n")
             for entry in self.entries[dst_mac]:
-                f.write("entry.dst_mac \t entry.next_hop_mac \t     entry.n_hops \t\t     " + str(round((time() - entry.last_activity), 2)))
-        f.write("-" * 90)
+                string = "%s \t %s \t\t\t %s \t %s\n"
+                values = (entry.dst_mac, entry.next_hop_mac, entry.n_hops,
+                          str(round((time() - entry.last_activity), 2)))
+                f.write(string % values)
+            f.write("\n")
+
+        f.write("-" * 90 + "\n")
 
     def print_entry(self, entry):
         TABLE_LOG.info("<Dest_MAC>: %s, <Next_hop_MAC>: %s, <Hop_count>: %s, <IDLE Time>: %s",
