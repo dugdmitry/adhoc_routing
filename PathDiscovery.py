@@ -10,19 +10,10 @@ import threading
 import pickle
 import Messages
 
-import logging
 import routing_logging
 
 
-# Set logging level
-LOG_LEVEL = logging.DEBUG
-# Set up logging
-# path_discovery_log_handler = routing_logging.create_routing_handler("routing.path_discovery.log", LOG_LEVEL)
-# PATH_DISCOVERY_LOG = logging.getLogger("root.path_discovery")
-# PATH_DISCOVERY_LOG.setLevel(LOG_LEVEL)
-# PATH_DISCOVERY_LOG.addHandler(path_discovery_log_handler)
-
-PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery", LOG_LEVEL)
+PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery")
 # PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "root.path_discovery", LOG_LEVEL)
 
 

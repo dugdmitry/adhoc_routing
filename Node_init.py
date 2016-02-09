@@ -5,7 +5,6 @@ Created on Sep 25, 2014
 @author: Dmitrii Dugaev
 """
 
-
 import DataHandler
 import RouteTable
 import Transport
@@ -16,7 +15,6 @@ import sys
 import os
 import signal
 import time
-import logging
 
 import Queue
 
@@ -27,9 +25,6 @@ from conf import DEV, UDS_ADDRESS, ABSOLUTE_PATH
 # Import module for handling the logging
 import routing_logging
 
-
-# Set logging level
-LOG_LEVEL = logging.DEBUG
 
 # Default daemon parameters.
 # File mode creation mask of the daemon.
@@ -44,7 +39,7 @@ TOPOLOGY_PATH = ABSOLUTE_PATH + "topology.conf"
 
 def create_root_logger():
     global ROUTING_LOG
-    ROUTING_LOG = routing_logging.create_routing_log("routing.log", "root", LOG_LEVEL)
+    ROUTING_LOG = routing_logging.create_routing_log("routing.log", "root")
 
 
 # Routing class instance

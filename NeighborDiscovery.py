@@ -10,18 +10,10 @@ import threading
 import time
 import pickle
 
-import logging
 import routing_logging
 
-# Set logging level
-LOG_LEVEL = logging.INFO
-# Set up logging
-# neighbor_log_handler = routing_logging.create_routing_handler("routing.neighbor_discovery.log", LOG_LEVEL)
-# NEIGHBOR_LOG = logging.getLogger("root.neighbor_discovery")
-# NEIGHBOR_LOG.setLevel(LOG_LEVEL)
-# NEIGHBOR_LOG.addHandler(neighbor_log_handler)
 
-NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery", LOG_LEVEL)
+NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery")
 # NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "root.neighbor_discovery", LOG_LEVEL)
 
 

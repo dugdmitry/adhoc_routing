@@ -1,24 +1,15 @@
 #!/usr/bin/python
-'''
+"""
 Created on Sep 30, 2014
 
 @author: Dmitrii Dugaev
-'''
+"""
 
 from time import time
-import logging
 import routing_logging
 
 
-# Set logging level
-LOG_LEVEL = logging.DEBUG
-# Set up logging
-# table_log_handler = routing_logging.create_routing_handler("routing.route_table.log", LOG_LEVEL)
-# TABLE_LOG = logging.getLogger("root.route_table")
-# TABLE_LOG.setLevel(LOG_LEVEL)
-# TABLE_LOG.addHandler(table_log_handler)
-
-TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table", LOG_LEVEL)
+TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
 # TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "root.route_table", LOG_LEVEL)
 
 

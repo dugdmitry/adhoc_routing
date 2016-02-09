@@ -10,21 +10,13 @@ import threading
 import os
 from fcntl import ioctl
 import struct
-import logging
 import routing_logging
 
 import Messages
 from conf import VIRT_IFACE_NAME
 
-# Set logging level
-LOG_LEVEL = logging.INFO
-# Set up logging
-# transport_log_handler = routing_logging.create_routing_handler("routing.transport.log", LOG_LEVEL)
-# TRANSPORT_LOG = logging.getLogger("root.transport")
-# TRANSPORT_LOG.setLevel(LOG_LEVEL)
-# TRANSPORT_LOG.addHandler(transport_log_handler)
 
-TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport", LOG_LEVEL)
+TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
 # TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "root.transport", LOG_LEVEL)
 TRANSPORT_LOG.info("INITIALIZING...")
 

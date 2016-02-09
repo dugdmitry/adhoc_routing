@@ -1,9 +1,9 @@
 #!/usr/bin/python
-'''
+"""
 Created on Oct 6, 2014
 
 @author: Dmitrii Dugaev
-'''
+"""
 
 import Messages
 import PathDiscovery
@@ -13,15 +13,12 @@ import pickle
 import threading
 from collections import deque
 
-import logging
 import routing_logging
 
 lock = threading.Lock()
 
-# Set logging level
-LOG_LEVEL = logging.DEBUG
 # Set up logging
-DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler", LOG_LEVEL)
+DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler")
 # DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "root.data_handler", LOG_LEVEL)
 
 
@@ -373,7 +370,7 @@ class ServiceMessagesHandler(threading.Thread):
                         
             # Send the broadcast frame with RREQ object
             self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, pickle.dumps(RREQ))
-            
+
     def RREP_handler(self, dsr_header, RREP):
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
