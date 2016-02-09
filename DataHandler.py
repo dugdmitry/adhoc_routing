@@ -21,11 +21,6 @@ lock = threading.Lock()
 # Set logging level
 LOG_LEVEL = logging.DEBUG
 # Set up logging
-# data_log_handler = routing_logging.create_routing_handler("routing.data_handler.log", LOG_LEVEL)
-# DATA_LOG = logging.getLogger("root.data_handler")
-# DATA_LOG.setLevel(LOG_LEVEL)
-# DATA_LOG.addHandler(data_log_handler)
-
 DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler", LOG_LEVEL)
 # DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "root.data_handler", LOG_LEVEL)
 
@@ -302,24 +297,12 @@ class ServiceMessagesHandler(threading.Thread):
             
             if isinstance(data, Messages.RouteRequest):
                 # Do something with incoming RREQ
-                # print "\nRREQ:", data
-                # print 'Source_IP:', data.src_ip
-                # print "Dest_IP:", data.dst_ip
-                # print "DSN:", data.dsn
-                # print "Hop_count:", data.hop_count
-                # print "ID:", data.id
 
                 DATA_LOG.info("Got RREQ: %s" % str(data))
                 
                 self.RREQ_handler(dsr_header, data)
             if isinstance(data, Messages.RouteReply):
                 # Do something with incoming RREP             
-                # print "\nRREP:", data
-                # print 'Source_IP:', data.src_ip
-                # print "Dest_IP:", data.dst_ip
-                # print "DSN:", data.dsn
-                # print "Hop_count:", data.hop_count
-                # print "ID:", data.id
 
                 DATA_LOG.info("Got RREP: %s" % str(data))
 

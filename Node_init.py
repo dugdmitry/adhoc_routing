@@ -16,7 +16,6 @@ import sys
 import os
 import signal
 import time
-# import getpass
 import logging
 
 import Queue
@@ -28,15 +27,10 @@ from conf import DEV, UDS_ADDRESS, ABSOLUTE_PATH
 # Import module for handling the logging
 import routing_logging
 
-from logging.handlers import RotatingFileHandler
 
 # Set logging level
 LOG_LEVEL = logging.DEBUG
 
-# Default paths to node settings and topology configuration
-# USERNAME = getpass.getuser()
-# ABSOLUTE_PATH = "/home/" + USERNAME + "/AdhocRouting/"
-# ABSOLUTE_PATH = "/home/fila/AdhocRouting/"
 # Default daemon parameters.
 # File mode creation mask of the daemon.
 UMASK = 0
@@ -51,32 +45,6 @@ TOPOLOGY_PATH = ABSOLUTE_PATH + "topology.conf"
 def create_root_logger():
     global ROUTING_LOG
     ROUTING_LOG = routing_logging.create_routing_log("routing.log", "root", LOG_LEVEL)
-
-
-# # Create and initialize main root logger with given logging handlers
-# def create_root_logger():
-#     routing_logger_handler = routing_logging.create_routing_handler("routing.daemon.log", LOG_LEVEL)
-#
-#     global ROUTING_LOG
-#     ROUTING_LOG = logging.getLogger("root")
-#     ROUTING_LOG.setLevel(LOG_LEVEL)
-#     ROUTING_LOG.addHandler(routing_logger_handler)
-
-
-# # Class for logging everything which is printed on the screen
-# class Logger(object):
-#     def __init__(self, filename = ABSOLUTE_PATH + "routing.log"):
-#         self.terminal = sys.stdout
-#         self.log = open(filename, "a")
-#
-#     def write(self, message):
-#         self.terminal.write(message)            # Output to console
-#         self.log.write(message)                  # Output to log-file
-#         # For immediate record to the log file, flush every time
-#         self.log.flush()
-#
-#     def _print(self, message):
-#         self.terminal.write(message)
 
 
 # Routing class instance
@@ -150,7 +118,6 @@ class Routing:
         try:
             opts = getopt.getopt(sys.argv[1:], "h", ["help", "set_ipv4=", "set_ipv6="])[0]
         except getopt.GetoptError:
-            # print "Valid options: --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address>"
             ROUTING_LOG.warning("Valid options: --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address>")
         
         for opt, arg in opts:
@@ -207,19 +174,13 @@ class RoutingDaemon:
             with open("/tmp/routing_daemon.pid", "r") as f:
                 self.current_pid = int(f.read())
         except IOError, e:
-            # print e
-            # print "pid", self.current_pid
-
             ROUTING_LOG.warning(str(e))
             ROUTING_LOG.warning("Routing instance is not running: %s", self.current_pid)
 
             return False
         
         except ValueError, e:
-            # print e
-            # print "PID:", self.current_pid
             # The pid has an invalid format or is empty
-
             ROUTING_LOG.warning("Given PID has an invalid format or is empty: %s", self.current_pid)
 
             return False
@@ -297,11 +258,7 @@ class RoutingDaemon:
 
         # This call to open is guaranteed to return the lowest file descriptor,
         # which will be 0 (stdin), since it was closed above.
-        # REDIRECT_TO = "/tmp/output.log"
-        # REDIRECT_TO = "/dev/null"
-
         # ## Make an error redirection of a single program execution to the output file ## #
-        # REDIRECT_TO = "/tmp/routing_output.log"
         f = open(REDIRECT_TO, "w")
         f.write("\n" + "-" * 100 + "\n")
         f.close()
@@ -313,15 +270,6 @@ class RoutingDaemon:
 
         # Create or rewrite corresponding pid-file with the new value of pid
         self.create_pid_file(os.getpid())
-        # # Create logger
-        # # Logging everything to a file
-        # sys.stdout = Logger()
-
-        # Create root logging instance once again, after closing up all file descriptors above
-        # create_root_logger()
-
-        # # Run the whole routing stuff
-        # self.routing.run()
 
         # Run the whole routing stuff
         routing = Routing()
@@ -331,8 +279,6 @@ class RoutingDaemon:
         # Check whether the daemon is already running or not
         running = self.check_current_pid()
         if running:
-            # print("The previous process is still running! Do nothing.\n")
-
             ROUTING_LOG.info("The previous process is still running! Do nothing.")
 
             return 0
@@ -344,49 +290,32 @@ class RoutingDaemon:
         # Check whether the daemon is already running or not
         running = self.check_current_pid()
         if running:
-            # print("Sending CTRL-C to the process...")
-
             ROUTING_LOG.info("Sending CTRL-C to the process...")
 
             os.kill(self.current_pid, signal.SIGINT)
         else:
-            # print("The process does not exist. Nothing to stop here.\n")
-
             ROUTING_LOG.info("The process does not exist. Nothing to stop here.")
     
     def restart(self):
         # Check whether the daemon is already running or not
         running = self.check_current_pid()
         if running:
-            # print("Found the process. Terminating it.\n")
-
             ROUTING_LOG.info("Found the process. Terminating it.")
 
             os.kill(self.current_pid, signal.SIGINT)
             time.sleep(0.2)
-            # print("Starting the process.\n")
-
             ROUTING_LOG.info("Starting the process...")
 
             self.create_daemon()
         else:
-            # print("No process found. Starting a new one.\n")
-
             ROUTING_LOG.info("No process found. Starting a new one...")
 
             self.create_daemon()
 
 if __name__ == "__main__":
-    # # Logging everything to a file
-    # sys.stdout = Logger()
-
     # Create root logger
     create_root_logger()
-
     # ## Creating routing and daemon instances ## #
-    # routing = Routing()
-    # daemon = RoutingDaemon(routing)
-    # routing = Routing()
     daemon = RoutingDaemon()
     # Creating unix domain client for sending commands
     uds_client = Transport.UdsClient(UDS_ADDRESS)
@@ -394,8 +323,6 @@ if __name__ == "__main__":
     try:
         opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "set_ipv4=", "set_ipv6="])
     except getopt.GetoptError:
-        # print "Valid options: --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address>"
-
         ROUTING_LOG.info("Valid options: --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address>")
 
         sys.exit(2)
@@ -409,16 +336,12 @@ if __name__ == "__main__":
             elif "restart" == args[0]:
                 daemon.restart()
             else:
-                # print("Unknown command.\n")
-
                 ROUTING_LOG.info("Unknown command.")
 
         # If an option is set, assign the given ip address to the app_trasport
         else:
             for opt, arg in opts:
                 if opt in ("-h", "--help"):
-                    # print "Usage: %s --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address> [start|stop|restart]\n" % sys.argv[0]
-
                     ROUTING_LOG.info("Usage: %s --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address> [start|stop|restart]", sys.argv[0])
 
                     sys.exit()
@@ -430,8 +353,6 @@ if __name__ == "__main__":
                         # Send the ipv4 address to uds_server
                         uds_client.send("ipv4-" + ipv4_address)                     # "-" is a delimeter
                     else:
-                        # print "The daemon is not running!"
-
                         ROUTING_LOG.info("The daemon is not running!")
                         
                 elif opt in ("--set_ipv6"):
@@ -442,13 +363,9 @@ if __name__ == "__main__":
                         # Send the ipv6 address to uds_server
                         uds_client.send("ipv6-" + ipv6_address)                     # "-" is a delimeter
                     else:
-                        # print "The daemon is not running!"
-
                         ROUTING_LOG.info("The daemon is not running!")
                 
     else:
-        # print("Usage: %s [options] start|stop|restart\n" % sys.argv[0])
-
         ROUTING_LOG.info("Usage: %s [options] start|stop|restart", sys.argv[0])
 
 
