@@ -21,7 +21,7 @@ import Queue
 import getopt
 
 # Get DEV name from the default configuration file
-from conf import DEV, UDS_ADDRESS, ABSOLUTE_PATH
+from conf import DEV, UDS_ADDRESS, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
 # Import module for handling the logging
 import routing_logging
 
@@ -132,7 +132,16 @@ class Routing:
     # Get the topology neighbors of a given node from the topology_list.
     # It is needed for correct filtering the broadcast frames sent via raw sockets
     def get_topology_neighbors(self):
-        f = open(TOPOLOGY_PATH, "r")
+        # Open a default topology file, if it exists
+        try:
+            f = open(TOPOLOGY_PATH, "r")
+        except IOError:
+            # No such file on this path
+            ROUTING_LOG.warning("Could not open default topology file!!!")
+            if SET_TOPOLOGY_FLAG:
+                ROUTING_LOG.warning("All incoming frames will be filtered out!!!")
+            return list()
+
         data = f.read()[:-1]
         entries = data.split("\n\n")
         for ent in entries:
@@ -140,6 +149,9 @@ class Routing:
             if arr[0] == self.node_mac:
                 neighbors = arr[1:]
                 return neighbors
+
+        # If nothing was found, return an empty list
+        return list()
             
     def get_mac(self, interface):
         # Return the MAC address of interface
@@ -152,10 +164,6 @@ class Routing:
 
 # Wraps up everything in daemon
 class RoutingDaemon:
-    # def __init__(self, routing):
-    #     self.routing = routing
-    #     self.current_pid = 0
-
     def __init__(self):
         self.current_pid = 0
 

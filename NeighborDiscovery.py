@@ -104,25 +104,16 @@ class ProcessNeighbors:
 class ListenNeighbors(threading.Thread):
     def __init__(self, node_mac, table_obj, hello_msg_queue):
         super(ListenNeighbors, self).__init__()
-        # self.port = 5000
         self.running = True
         self.neighbors = ProcessNeighbors(node_mac, table_obj)
-        # self.listen_socket = Transport.ReceiveTransport(self.port)
-        # self.listen_raw_socket = Transport.RawTransport(dev)
         self.hello_msg_queue = hello_msg_queue
         
     def run(self):
         while self.running:
             data = self.hello_msg_queue.get()
-            # data = self.listen_raw_socket.recv_raw_frame()
-            # print "Received data:", data.ip, data.mac
-            # print "Neighbors list:", self.neighbors.neighbors_list
-
             self.neighbors.process_neighbor(pickle.loads(data))
             
     def quit(self):
-        # self.listen_raw_socket.close_raw_recv_socket()
-        # self.listen_socket.close_recv_socket()
         self.running = False
 
 
@@ -178,8 +169,6 @@ class NeighborDiscovery:
         
         self.listen_thread._Thread__stop()
         self.advertise_thread._Thread__stop()
-        
-        # print "NeighborDiscovery threads are stopped"
 
         NEIGHBOR_LOG.info("NeighborDiscovery threads are stopped")
 

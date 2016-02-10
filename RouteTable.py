@@ -15,7 +15,6 @@ TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route
 
 class Entry:
     def __init__(self, dst_mac, next_hop_mac, n_hops):
-
         self.dst_mac = dst_mac                                      # MAC address of destination node
         self.next_hop_mac = next_hop_mac                            # Next hop mac address
         self.n_hops = n_hops                                        # Number of hops to destination

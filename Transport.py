@@ -13,7 +13,7 @@ import struct
 import routing_logging
 
 import Messages
-from conf import VIRT_IFACE_NAME
+from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
 
 
 TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
@@ -103,16 +103,11 @@ class UdsServer(threading.Thread):
 # Class for virtual interface
 class VirtualTransport:
     def __init__(self):
-        # IFF_TAP   = 0x0002
-        # MODE = 0
-        # DEBUG = 0
         tun_mode = IFF_TUN
         f = os.open("/dev/net/tun", os.O_RDWR)
         # ifs = ioctl(f, TUNSETIFF, struct.pack("16sH", "tun0", tun_mode))
         ioctl(f, TUNSETIFF, struct.pack("16sH", VIRT_IFACE_NAME, tun_mode))
-        
-        # self.setIpAddr4("tun0", node_ip)
-        # self.setIpAddr6("tun0")
+
         self.setMtu(VIRT_IFACE_NAME, 1400)                                      # !!! MTU value is fixed for now. !!!
         self.interfaceUp(VIRT_IFACE_NAME)
         
@@ -144,11 +139,10 @@ class VirtualTransport:
         try:
             addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
         except IOError:
-            # print "No IPv4 address assigned!"
-
+            # No IPv4 address was assigned"
             TRANSPORT_LOG.warning("No IPv4 address assigned!")
-
             return None
+
         return socket.inet_ntoa(addr)
     
     def get_ipv6_address(self):
@@ -168,8 +162,7 @@ class VirtualTransport:
                 output.append(socket.inet_ntop(socket.AF_INET6, addr))
             return output
         else:
-            # print "No IPv6 addresses assigned!"
-
+            # No IPv6 addresses were assigned"
             TRANSPORT_LOG.warning("No IPv6 address assigned!")
 
             return [None]
@@ -304,14 +297,11 @@ class RawTransport:
             src_mac = self.get_src_mac(data[:14])
 
             # Check if the mac in the list of topology_neighbors. If not - just drop it.
-            if src_mac in self.topology_neighbors:
+            # If SET_TOPOLOGY_FLAG is False, then do not filter any frames (the if statement below is always True)
+            if (src_mac in self.topology_neighbors) >= SET_TOPOLOGY_FLAG:
                 # Get and return dsr_header object and upper layer raw data
                 # Create dsr_header object
-
-                # print src_mac
-
                 TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
-
                 dsr_header_obj = self.create_dsr_object(data)
 
                 # Get upper raw data
@@ -335,11 +325,6 @@ class RawTransport:
         # Get the type of the DSR header
         dsr_header_str = data[14:(14 + length)]
         dsr_type = struct.unpack("B", dsr_header_str[:1])[0]   # Read the first byte from the header
-        # dsr_data = struct.unpack(header_format, dsr_header_str)
-        # # Detect type of the received dsr frame
-        # _type = dsr_data[0]
-
-        # print "type:", dsr_type
 
         TRANSPORT_LOG.debug("GOT DSR TYPE: %s", dsr_type)
 
@@ -353,10 +338,6 @@ class RawTransport:
             dsr_header_obj.broadcast_id = int(dsr_data[4])
             dsr_header_obj.broadcast_ttl = int(dsr_data[5])
 
-            # print dsr_header_obj.type
-            # print dsr_header_obj.length
-            # print dsr_header_obj.broadcast_id
-
         else:
             # Unpack dsr_data from the dsr filed in the frame according to the format of dsr types 0, 1, 2 and 3
             dsr_data = struct.unpack(Messages.DsrHeader.unicast_header_format, dsr_header_str)
@@ -364,9 +345,6 @@ class RawTransport:
             dsr_header_obj.src_mac = self.int2mac(int(dsr_data[2]))
             dsr_header_obj.dst_mac = self.int2mac(int(dsr_data[3]))
             dsr_header_obj.tx_mac = self.int2mac(int(dsr_data[4]))
-
-            # print dsr_header_obj.type
-            # print dsr_header_obj.length
 
         TRANSPORT_LOG.debug("Created DSR object: %s", str(dsr_header_obj))
 
@@ -381,8 +359,6 @@ class RawTransport:
             byte = str(hex(i))[2:]
             if len(byte) == 1:
                 byte = "0" + byte
-            # if byte == "0":
-            #     byte = "00"
             src_mac = src_mac + byte + ":"
         
         return src_mac[:-1]
