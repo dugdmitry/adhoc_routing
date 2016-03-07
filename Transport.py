@@ -17,8 +17,7 @@ from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
 
 
 TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
-# TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "root.transport", LOG_LEVEL)
-TRANSPORT_LOG.info("INITIALIZING...")
+TRANSPORT_LOG.info("INITIALIZING TRANSPORT...")
 
 # Syscall ids for managing network interfaces via ioctl
 TUNSETIFF = 0x400454ca
@@ -108,7 +107,7 @@ class VirtualTransport:
         # ifs = ioctl(f, TUNSETIFF, struct.pack("16sH", "tun0", tun_mode))
         ioctl(f, TUNSETIFF, struct.pack("16sH", VIRT_IFACE_NAME, tun_mode))
 
-        self.setMtu(VIRT_IFACE_NAME, 1400)                                      # !!! MTU value is fixed for now. !!!
+        self.setMtu(VIRT_IFACE_NAME, 1400)      # !!! MTU value is fixed for now. !!!
         self.interfaceUp(VIRT_IFACE_NAME)
         
         self.f = f
@@ -169,8 +168,6 @@ class VirtualTransport:
         
     def get_L3_addresses_from_packet(self, packet):
         l3_id = struct.unpack("!H", packet[2:4])[0]
-        
-        # print "L3 PROTO ID:", hex(l3_id)
 
         TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
         
@@ -181,10 +178,8 @@ class VirtualTransport:
             addresses = self.get_data_from_ipv6_header(packet)
             return addresses
         else:
-            # print "The packet has UNSUPPORTED L3 protocol, dropping the packet"
-
+            # The packet has UNSUPPORTED L3 protocol, drop it
             TRANSPORT_LOG.warning("The packet has UNSUPPORTED L3 protocol, dropping the packet")
-
             pass
         
     def get_data_from_ipv4_header(self, packet):
@@ -218,8 +213,6 @@ class VirtualTransport:
         output = os.read(self.f, 65000)
         addresses = self.get_L3_addresses_from_packet(output)
 
-        # print "Addresses:", addresses
-
         TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s", addresses)
 
         return addresses + [output]
@@ -245,12 +238,10 @@ class RawTransport:
         
     def send_raw_frame(self, dst_mac, dsr_header, payload):
         eth_header = self.gen_eth_header(self.node_mac, dst_mac)
-        # print "Generating dsr header..."
 
         TRANSPORT_LOG.debug("Generating dsr bin header...")
 
         dsr_bin_header = self.gen_dsr_header(dsr_header)
-        # print "Dsr header is generated!"
 
         TRANSPORT_LOG.debug("Dsr bin header is generated!")
 
@@ -280,7 +271,13 @@ class RawTransport:
     
     def int2mac(self, mac_int):
         s = hex(mac_int)
-        mac = ":".join([s[i:i+2] for i in range(2, len(s), 2)])
+        # !!! WARNING !!! #
+        # This method works ONLY with MAC-48 addresses!!! Need to be rewritten if Zigbee will be used (MAC-64)
+        # This is why there comes up this "14" number in the line below:
+        # 12 chars of MAC address + 2 first chars of "0x"
+        # This "14" number restricts any additional chars at the end of the integer, like:
+        # the "L" character appearing in 32-bit processors
+        mac = ":".join([s[i:i+2] for i in range(2, 14, 2)])
         return mac
     
     def int2ip(self, addr):
@@ -310,7 +307,6 @@ class RawTransport:
                 return dsr_header_obj, upper_raw_data
 
             elif src_mac == self.node_mac:
-                # print "!!! THIS IS MY OWN MAC, YOBBA !!! %s" % src_mac
                 TRANSPORT_LOG.debug("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
 
             # Else, do nothing with the received frame
@@ -366,5 +362,4 @@ class RawTransport:
     def close_raw_recv_socket(self):
         self.running = False
         self.recv_socket.close()
-        # print "Raw socket closed"
         TRANSPORT_LOG.info("Raw socket closed")
