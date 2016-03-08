@@ -12,7 +12,7 @@ import routing_logging
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
 
 
-# Test testbed branch.
+# Test testbed branch
 class Entry:
     def __init__(self, dst_mac, next_hop_mac, n_hops):
         self.dst_mac = dst_mac                                      # MAC address of destination node
