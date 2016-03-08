@@ -14,7 +14,6 @@ import routing_logging
 
 
 PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery")
-# PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "root.path_discovery", LOG_LEVEL)
 
 
 class PathDiscoveryHandler(threading.Thread):
@@ -67,7 +66,7 @@ class RreqRoutine(threading.Thread):
         self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
         self.dsr_header = Messages.DsrHeader(2)       # Type 2 corresponds to RREQ service message
         self.max_retries = 3
-        self.interval = 1
+        self.interval = 3
 
     def run(self):
         count = 0
@@ -77,7 +76,6 @@ class RreqRoutine(threading.Thread):
                 time.sleep(self.interval)
             else:
                 # Max retries reached. Delete corresponding packets from rreq_list, stop the thread
-                # print "Maximum retries reached!!! Deleting the thread..."
 
                 PATH_DISCOVERY_LOG.info("Maximum retries reached!!! Deleting the thread...")
 
@@ -102,8 +100,6 @@ class RreqRoutine(threading.Thread):
         
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(RREQ))
 
-        # print "New  RREQ for IP: '%s' has been sent. Waiting for RREP" % self.dst_ip
-
         PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", str(self.dst_ip))
         
     def quit(self):
@@ -125,8 +121,6 @@ class RrepHandler(threading.Thread):
         while self.running:
             src_ip = self.rrep_queue.get()
 
-            # print "Got RREP. Deleting RREQ thread..."
-
             PATH_DISCOVERY_LOG.info("Got RREP. Deleting RREQ thread...")
 
             # Get the packets from the rreq_list
@@ -138,8 +132,6 @@ class RrepHandler(threading.Thread):
             del self.rreq_thread_list[src_ip]
             # Send the packets back to original app_queue
             for packet in data:
-                # print "Putting delayed packets in app_queue:"
-                # print packet
 
                 PATH_DISCOVERY_LOG.info("Putting delayed packets in app_queue...")
                 PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet[1]))

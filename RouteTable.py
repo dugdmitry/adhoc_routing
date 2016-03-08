@@ -10,17 +10,15 @@ import routing_logging
 
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
-# TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "root.route_table", LOG_LEVEL)
 
 
-# Test testbed branch
 class Entry:
     def __init__(self, dst_mac, next_hop_mac, n_hops):
         self.dst_mac = dst_mac                                      # MAC address of destination node
         self.next_hop_mac = next_hop_mac                            # Next hop mac address
         self.n_hops = n_hops                                        # Number of hops to destination
         self.last_activity = time()                                 # Timestamp of the last activity
-        self.timeout = 60                                          # Timeout in seconds upon deleting an entry
+        self.timeout = 120                                          # Timeout in seconds upon deleting an entry
         
     def __eq__(self, other):
         return (self.dst_mac == other.dst_mac and
@@ -56,8 +54,6 @@ class Table:
             
         else:
             self.entries[dst_mac] = [entry]
-            # Print the route table
-            # print "New entry has been added. Table updated."
 
             TABLE_LOG.info("New entry has been added. Table updated.")
 
@@ -73,8 +69,6 @@ class Table:
         for dst_mac in self.entries:
             entries_to_delete.update({dst_mac: []})
 
-            # entries_to_delete = []
-
             for entry in self.entries[dst_mac]:
                 if entry.next_hop_mac == mac:
                     entries_to_delete[dst_mac].append(entry)
@@ -86,8 +80,6 @@ class Table:
             # Check if that was the last existing entry. If yes -> delete the key from the dictionary
             if self.entries[dst_mac] == []:
                 del self.entries[dst_mac]
-
-        # print "All entries with given next_hop_mac have been removed. Table updated."
 
         TABLE_LOG.info("All entries with given next_hop_mac have been removed. Table updated.")
 
@@ -160,7 +152,6 @@ class Table:
             for ent in self.entries[dst_mac]:
                 if (time() - ent.last_activity) > ent.timeout:
                     entries_to_delete.append(ent)
-                    # self.entries[dst_mac].remove(ent)
             for ent in entries_to_delete:
                 self.entries[dst_mac].remove(ent)
             # If the list becomes empty, then delete it
@@ -168,6 +159,4 @@ class Table:
                 del self.entries[dst_mac]
 
         else:
-            print "This should never happen: RouteTable.check_expiry(dst_mac)"
-
             TABLE_LOG.warning("This should never happen: RouteTable.check_expiry(dst_mac)")

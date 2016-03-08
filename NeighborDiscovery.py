@@ -14,7 +14,6 @@ import routing_logging
 
 
 NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery")
-# NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "root.neighbor_discovery", LOG_LEVEL)
 
 
 class Neighbor:
@@ -28,11 +27,10 @@ class ProcessNeighbors:
     def __init__(self, node_mac, table_obj):
         self.table = table_obj          # Route table
         self.neighbors_list = {}        # List of current neighbors in a form {ip, neighbor_object}
-        # self.own_ip = ip
-        
+
         self.node_mac = node_mac
         
-        self.expiry_interval = 5
+        self.expiry_interval = 60
         self.last_expiry_check = time.time()
         
     def process_neighbor(self, data):
@@ -59,7 +57,6 @@ class ProcessNeighbors:
     def update_neighbors_file(self):
         f = open("neighbors_file", "w")
         for mac in self.neighbors_list:
-            # print "Neighbor's IPs:", self.neighbors_list[mac].l3_addresses
 
             NEIGHBOR_LOG.debug("Neighbor's IPs: %s", str(self.neighbors_list[mac].l3_addresses))
 
@@ -76,7 +73,6 @@ class ProcessNeighbors:
                 keys_to_delete.append(n)
         # Deleting from the neighbors' list
         for k in keys_to_delete:
-            # print "Neighbor has gone offline. Removing", k
 
             NEIGHBOR_LOG.info("Neighbor has gone offline. Removing: %s", str(k))
 
@@ -87,7 +83,6 @@ class ProcessNeighbors:
 
     def add_neighbor_entry(self, data):
         # Add an entry in the route table in a form (dest_mac, next_hop_mac, n_hops)
-        # print "Adding a new neighbor:", data.mac
 
         NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(data.mac))
         
@@ -142,8 +137,6 @@ class AdvertiseNeighbor(threading.Thread):
         # Try to get L3 ip address (ipv4 or ipv6) assigned to the node, if there is such one
         node_ips = self.app_transport.get_L3_addresses_from_interface()
         self.message.l3_addresses = node_ips
-
-        # print "Sending raw HELLO message"
 
         NEIGHBOR_LOG.info("Sending raw HELLO message")
 
