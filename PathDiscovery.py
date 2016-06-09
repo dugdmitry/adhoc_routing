@@ -7,7 +7,6 @@ Created on Oct 8, 2014
 
 import time
 import threading
-import pickle
 import Messages
 
 import routing_logging
@@ -71,7 +70,7 @@ class RreqRoutine(threading.Thread):
         self.src_ip = src_ip
         self.dst_ip = dst_ip
         self.node_mac = table.node_mac
-        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
+        # self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
         self.dsr_header = Messages.DsrHeader(2)       # Type 2 corresponds to RREQ service message
         self.max_retries = 3
         self.interval = 1000              # ## !!! MAKING A BIG INTERVAL WHILE IMPLEMENTING ACK SCHEME FOR NOW !!! ###
