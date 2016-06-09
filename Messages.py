@@ -1,14 +1,16 @@
 #!/usr/bin/python
-'''
+"""
 Created on Oct 6, 2014
 
 @author: Dmitrii Dugaev
-'''
+"""
 
 from random import randint
 
 
 class RouteRequest:
+    dsr_type = 2
+
     def __init__(self):
         self.id = randint(1, 1000000)
         self.src_ip = ""
@@ -24,6 +26,8 @@ class RouteRequest:
 
 
 class RouteReply:
+    dsr_type = 3
+
     def __init__(self):
         self.id = 0
         self.src_ip = ""
@@ -42,8 +46,20 @@ class HelloMessage:
     def __init__(self):
         self.id = randint(1, 1000000)
         self.mac = ""
-        self.l3_addresses = []          # A list of L3 addresses, assigned to this node
+        self.l3_addresses = []      # A list of L3 addresses, assigned to this node
         self.retries = 0
+
+
+# Describes an ACK message from one of the service messages
+class AckMessage:
+    def __init__(self, msg_hash):
+        self.msg_hash = msg_hash       # Contains a unique hash, created from the original msg_id and the dest_address
+
+    def __str__(self):
+        out_tuple = (str(self.msg_hash))
+        out_string = "ACK hash: %s" % out_tuple
+
+        return out_string
 
 
 class DsrHeader:
@@ -58,7 +74,7 @@ class DsrHeader:
     broadcast_header_format = "BBddii"
 
     def __init__(self, _type=0):
-        # Available types: 0 - Data packet, 1 - HELLO Message, 2,3 - RREQ, RREP, 4 - Broadcast frame
+        # Available types: 0 - Data packet, 1 - HELLO Message, 2,3 - RREQ, RREP, 4 - Broadcast frame, 5 - ACK frame
         self.type = _type
         # !!! WARNING !!! #
         # !!! The header_format MUST ALWAYS have the same size for ANY dsr type !!! #

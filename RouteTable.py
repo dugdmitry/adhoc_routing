@@ -14,11 +14,11 @@ TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route
 
 class Entry:
     def __init__(self, dst_mac, next_hop_mac, n_hops):
-        self.dst_mac = dst_mac                                      # MAC address of destination node
-        self.next_hop_mac = next_hop_mac                            # Next hop mac address
-        self.n_hops = n_hops                                        # Number of hops to destination
-        self.last_activity = time()                                 # Timestamp of the last activity
-        self.timeout = 120                                          # Timeout in seconds upon deleting an entry
+        self.dst_mac = dst_mac                                  # MAC address of destination node
+        self.next_hop_mac = next_hop_mac                        # Next hop mac address
+        self.n_hops = n_hops                                    # Number of hops to destination
+        self.last_activity = time()                             # Timestamp of the last activity
+        self.timeout = 120                                      # Timeout in seconds upon deleting an entry
         
     def __eq__(self, other):
         return (self.dst_mac == other.dst_mac and
@@ -34,8 +34,8 @@ class Entry:
 
 class Table:
     def __init__(self, node_mac):
-        self.entries = {}                 # List of entries
-        self.arp_table = {}               # A dictionary which maps current IP addresses with the devices' MAC addresses
+        self.entries = {}             # List of entries
+        self.arp_table = {}           # A dictionary which maps current IP addresses with the devices' MAC addresses
         self.node_mac = node_mac
         
     # Add an entry to the route table and the arp_table
@@ -84,6 +84,16 @@ class Table:
         TABLE_LOG.info("All entries with given next_hop_mac have been removed. Table updated.")
 
         self.print_table()
+
+    # Return the current list of neighbors
+    def get_neighbors(self):
+        neighbors_list = []
+        for dst_mac in self.entries:
+            for entry in self.entries[dst_mac]:
+                if entry.n_hops == 1:
+                    neighbors_list.append(entry.next_hop_mac)
+
+        return neighbors_list
 
     # Print all entries of the route table to a file
     def print_table(self):

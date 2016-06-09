@@ -229,6 +229,7 @@ class RawTransport:
         self.proto = [0x77, 0x77]
                                                         
         self.node_mac = node_mac
+        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
 
         self.topology_neighbors = topology_neighbors
         self.running = True
