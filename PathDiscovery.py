@@ -17,19 +17,22 @@ PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.
 
 
 class PathDiscoveryHandler(threading.Thread):
-    def __init__(self, app_queue, wait_queue, rrep_queue, raw_transport):
+    def __init__(self, app_queue, wait_queue, rrep_queue, arq_handler, table):
         super(PathDiscoveryHandler, self).__init__()
         self.wait_queue = wait_queue
         self.rreq_list = {}
         self.rreq_thread_list = {}
         self.running = True
-        self.raw_transport = raw_transport
-        self.node_mac = raw_transport.node_mac
+        # self.raw_transport = raw_transport
+        # self.node_mac = table.node_mac
+
+        self.arq_handler = arq_handler
+        self.table = table
 
         # Starting a thread for handling incoming RREP requests
         self.rrep_handler_thread = RrepHandler(app_queue, rrep_queue, self.rreq_list, self.rreq_thread_list)
         self.rrep_handler_thread.start()
-        
+
     def run(self):
         while self.running:
             src_ip, dst_ip, raw_data = self.wait_queue.get()
@@ -39,7 +42,8 @@ class PathDiscoveryHandler(threading.Thread):
             # If the request is new, start a new request thread, append new request to rreq_list
             else:
                 self.rreq_list[dst_ip] = [[src_ip, dst_ip, raw_data]]
-                self.rreq_thread_list[dst_ip] = RreqRoutine(self.raw_transport, self.rreq_list, self.rreq_thread_list, src_ip, dst_ip, self.node_mac)
+                self.rreq_thread_list[dst_ip] = RreqRoutine(self.arq_handler, self.table,
+                                                            self.rreq_list, self.rreq_thread_list, src_ip, dst_ip)
                 self.rreq_thread_list[dst_ip].start()
 
     def quit(self):
@@ -54,19 +58,23 @@ class PathDiscoveryHandler(threading.Thread):
 
 # A routine thread for periodically broadcasting RREQs
 class RreqRoutine(threading.Thread):
-    def __init__(self, raw_transport, rreq_list, rreq_thread_list, src_ip, dst_ip, node_mac):
+    def __init__(self, arq_handler, table, rreq_list, rreq_thread_list, src_ip, dst_ip):
         super(RreqRoutine, self).__init__()
         self.running = True
-        self.raw_transport = raw_transport
+        # self.raw_transport = raw_transport
+
+        self.arq_handler = arq_handler
+        self.table = table
+
         self.rreq_list = rreq_list
         self.rreq_thread_list = rreq_thread_list
         self.src_ip = src_ip
         self.dst_ip = dst_ip
-        self.node_mac = node_mac
+        self.node_mac = table.node_mac
         self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
         self.dsr_header = Messages.DsrHeader(2)       # Type 2 corresponds to RREQ service message
         self.max_retries = 3
-        self.interval = 3
+        self.interval = 1000              # ## !!! MAKING A BIG INTERVAL WHILE IMPLEMENTING ACK SCHEME FOR NOW !!! ###
 
     def run(self):
         count = 0
@@ -97,8 +105,10 @@ class RreqRoutine(threading.Thread):
         # Prepare a dsr_header
         self.dsr_header.src_mac = self.node_mac
         self.dsr_header.tx_mac = self.node_mac
-        
-        self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(RREQ))
+
+        # self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(RREQ))
+
+        self.arq_handler.arq_send(RREQ, self.dsr_header, self.table.get_neighbors())
 
         PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", str(self.dst_ip))
         

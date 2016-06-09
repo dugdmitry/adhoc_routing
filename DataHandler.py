@@ -7,6 +7,7 @@ Created on Oct 6, 2014
 
 import Messages
 import PathDiscovery
+import ArqHandler
 
 import Queue
 import pickle
@@ -34,7 +35,7 @@ class AppHandler(threading.Thread):
         self.transport = raw_transport
         self.node_mac = table.node_mac
         
-        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
+        self.broadcast_mac = raw_transport.broadcast_mac
         
     def run(self):
         while self.running:
@@ -118,6 +119,10 @@ class DataHandler:
     def __init__(self, app_transport, app_queue, hello_msg_queue, raw_transport, table):
         # ## Creating a socket object for exchanging service messages
         # service_transport = Transport.ServiceTransport(table.node_ip, 3001)
+
+        # Create an arq handler object
+        arq_handler = ArqHandler.ArqHandler(raw_transport)
+
         # Creating a queue for receiving RREPs
         rrep_queue = Queue.Queue()
         # Creating a queue for the delayed packets waiting for rrep message
@@ -128,15 +133,17 @@ class DataHandler:
         broadcast_list = deque(maxlen=1000000)  # Limit the max length of the list
 
         # Creating thread objects
-        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue, rrep_queue, raw_transport)
+        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue,
+                                                                        rrep_queue, arq_handler, table)
         
         self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport, table, broadcast_list)
-        
-        self.service_messages_handler_thread = ServiceMessagesHandler(table, app_transport, raw_transport, rrep_queue, service_msg_queue)
-        
+
         self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue,
                                                                       hello_msg_queue, app_transport,
                                                                       raw_transport, table, broadcast_list)
+
+        self.service_messages_handler_thread = ServiceMessagesHandler(table, app_transport, raw_transport,
+                                                                      arq_handler, rrep_queue, service_msg_queue)
 
     # Starting the threads
     def run(self):
@@ -173,8 +180,8 @@ class IncomingTrafficHandler(threading.Thread):
         self.hello_msg_queue = hello_msg_queue
         self.table = table
         self.broadcast_list = broadcast_list
-        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
-        self.max_broadcast_ttl = 1              # Set a maximum number of hops a broadcast frame can be forwarded over
+        self.broadcast_mac = raw_transport.broadcast_mac
+        self.max_broadcast_ttl = 1          # Set a maximum number of hops a broadcast frame can be forwarded over
         
     def run(self):
         while self.running:
@@ -220,9 +227,9 @@ class IncomingTrafficHandler(threading.Thread):
                 # Handle HELLO message
                 self.hello_msg_queue.put(raw_data)
 
-            # If the dsr packet contains RREQ or RREQ service messages
-            elif dsr_type == 2 or dsr_type == 3:
-                # Handle RREQ / RREP
+            # If the dsr packet contains RREQ or RREQ, or the ACK service messages (types 2, 3 and 5)
+            elif dsr_type == 2 or dsr_type == 3 or dsr_type == 5:
+                # Handle RREQ / RREP / ACK
                 self.service_msg_queue.put([dsr_header, raw_data])
 
             # If the packet is the broadcast one, either broadcast it further or drop it
@@ -270,12 +277,14 @@ class IncomingTrafficHandler(threading.Thread):
 
 
 class ServiceMessagesHandler(threading.Thread):
-    def __init__(self, route_table, app_transport, raw_transport, rrep_queue, service_msg_queue):
+    def __init__(self, route_table, app_transport, raw_transport, arq_handler, rrep_queue, service_msg_queue):
         super(ServiceMessagesHandler, self).__init__()
         self.table = route_table
         self.raw_transport = raw_transport
         self.app_transport = app_transport
-        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
+        self.arq_handler = arq_handler
+
+        self.broadcast_mac = raw_transport.broadcast_mac
         self.node_mac = route_table.node_mac
         self.service_msg_queue = service_msg_queue
         self.rrep_queue = rrep_queue  # Store the received RREP in queue for further handling by Path_Discovery thread
@@ -294,16 +303,21 @@ class ServiceMessagesHandler(threading.Thread):
             
             if isinstance(data, Messages.RouteRequest):
                 # Do something with incoming RREQ
-
                 DATA_LOG.info("Got RREQ: %s" % str(data))
                 
-                self.RREQ_handler(dsr_header, data)
+                self.rreq_handler(dsr_header, data)
+
             if isinstance(data, Messages.RouteReply):
                 # Do something with incoming RREP             
-
                 DATA_LOG.info("Got RREP: %s" % str(data))
 
-                self.RREP_handler(dsr_header, data)
+                self.rrep_handler(dsr_header, data)
+
+            if isinstance(data, Messages.AckMessage):
+                # Do something with ACK
+                DATA_LOG.info("Got ACK: %s" % str(data))
+
+                self.ack_handler(data)
                 
     def gen_dsr_header(self, dsr_header, _type):
         dsr = Messages.DsrHeader(_type)
@@ -313,101 +327,114 @@ class ServiceMessagesHandler(threading.Thread):
         
         return dsr
 
-    def RREQ_handler(self, dsr_header, RREQ):
-        if RREQ.id in self.rreq_ids:
-            # print "The RREQ with this ID has been already processed\n"
+    def rreq_handler(self, dsr_header, rreq):
+        # Send back the ACK on the received RREQ in ALL cases
+        self.arq_handler.send_ack(rreq, dsr_header.tx_mac)
 
-            DATA_LOG.info("The RREQ with this ID has been already processed")
+        if rreq.id in self.rreq_ids:
+            # Send the ACK back anyway, but do nothing with the message itself
+            DATA_LOG.info("The RREQ with this ID has been already processed. Sending the ACK back.")
 
             return 0
-        
-        # print "Processing RREQ \n"
 
         DATA_LOG.info("Processing RREQ")
 
-        self.rreq_ids.append(RREQ.id)
-        
+        self.rreq_ids.append(rreq.id)
+
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
-        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREQ.hop_count)
+        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
         # Update arp_table
-        self.table.update_arp_table(RREQ.src_ip, dsr_header.src_mac)
+        self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
         
         # Get a list of currently assigned ip addresses to the node
         node_ips = self.app_transport.get_L3_addresses_from_interface()
         
-        if RREQ.dst_ip in node_ips:        
-            # print "Processing the RREQ, generating and sending back the RREP\n"
+        if rreq.dst_ip in node_ips:
 
             DATA_LOG.info("Processing the RREQ, generating and sending back the RREP")
 
             # Generate and send RREP back to the source
-            RREP = Messages.RouteReply()
-            RREP.src_ip = RREQ.dst_ip
-            RREP.dst_ip = RREQ.src_ip
-            RREP.hop_count = 1
-            RREP.id = RREQ.id
+            rrep = Messages.RouteReply()
+            rrep.src_ip = rreq.dst_ip
+            rrep.dst_ip = rreq.src_ip
+            rrep.hop_count = 1
+            rrep.id = rreq.id
             
             # Prepare a dsr_header
             new_dsr_header = self.gen_dsr_header(dsr_header, 3)         # Type 3 corresponds to RREP service message
-            self.raw_transport.send_raw_frame(dsr_header.tx_mac, new_dsr_header, pickle.dumps(RREP))
-            
-            # print RREP, RREQ.dst_ip
 
-            DATA_LOG.debug("Generated RREP: %s", str(RREP))
-            DATA_LOG.debug("RREQ.dst_ip: %s", str(RREQ.dst_ip))
+            # Send the RREP reliably using arq_handler
+            self.arq_handler.arq_send(rrep, new_dsr_header, dsr_header.tx_mac)
+
+            # self.raw_transport.send_raw_frame(dsr_header.tx_mac, new_dsr_header, pickle.dumps(rrep))
+
+            DATA_LOG.debug("Generated RREP: %s", str(rrep))
+            DATA_LOG.debug("RREQ.dst_ip: %s", str(rreq.dst_ip))
 
         else:
-            # print "Broadcasting RREQ further\n"
 
             DATA_LOG.info("Broadcasting RREQ further")
 
             # Change next_hop value to NODE_IP and broadcast the message further
-            RREQ.hop_count += 1
-            
+            rreq.hop_count += 1
+
+            # Send the RREQ reliably using arq_handler to the list of current neighbors except the one who sent it
+            dst_mac_list = self.table.get_neighbors()
+            dst_mac_list.remove(dsr_header.tx_mac)
+
             # Prepare a dsr_header
             dsr_header.tx_mac = self.node_mac
-                        
-            # Send the broadcast frame with RREQ object
-            self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, pickle.dumps(RREQ))
 
-    def RREP_handler(self, dsr_header, RREP):
+            self.arq_handler.arq_send(rreq, dsr_header, dst_mac_list)
+
+            # # Send the broadcast frame with RREQ object
+            # self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, pickle.dumps(rreq))
+
+    def rrep_handler(self, dsr_header, rrep):
+        # Send back the ACK on the received RREP in ALL cases
+        self.arq_handler.send_ack(rrep, dsr_header.tx_mac)
+
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
         # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
-        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
         # Update arp_table
-        self.table.update_arp_table(RREP.src_ip, dsr_header.src_mac)
-        self.table.update_arp_table(RREP.dst_ip, dsr_header.dst_mac)
+        self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
+        self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
         
         if dsr_header.dst_mac != self.node_mac:
             # Forward RREP further
-            # print "Forwarding RREP further\n"
-
-            DATA_LOG.info("Forwarding RREP further. RREP_ID: %s", str(RREP.id))
+            DATA_LOG.info("Forwarding RREP further. RREP_ID: %s", str(rrep.id))
 
             # Find the entry in route table, corresponding to a given RREQ(RREP) id
-            
             entry = self.table.lookup_entry(dsr_header.dst_mac)
             
             # If no entry is found. Just do nothing.
             if entry is None:
-                # print "No further route for this RREP. Removing"
-                DATA_LOG.info("No further route for this RREP. Removing. RREP_ID: %s", str(RREP.id))
+
+                DATA_LOG.info("No further route for this RREP. Removing. RREP_ID: %s", str(rrep.id))
+
             else:
                 # Forward the RREP to the next hop derived from the route table
-                RREP.hop_count += 1
+                rrep.hop_count += 1
 
                 # Prepare a dsr_header
                 dsr_header.tx_mac = self.node_mac
 
-                self.raw_transport.send_raw_frame(entry.next_hop_mac, dsr_header, pickle.dumps(RREP))
+                # Forward the RREP reliably using arq_handler
+                self.arq_handler.arq_send(rrep, dsr_header, entry.next_hop_mac)
+
+                # self.raw_transport.send_raw_frame(entry.next_hop_mac, dsr_header, pickle.dumps(rrep))
 
         else:
-            # print "This RREP is for me. Stop the discovery procedure, send the data.\n"
 
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
 
             # Put RREP in rrep_queue
-            self.rrep_queue.put(RREP.src_ip)
+            self.rrep_queue.put(rrep.src_ip)
 
+    # Handling incoming ack messages
+    def ack_handler(self, ack):
+        # Process the ACK by arq_handler
+        self.arq_handler.process_ack(ack)
