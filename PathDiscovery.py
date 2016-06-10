@@ -79,7 +79,7 @@ class RreqRoutine(threading.Thread):
         count = 0
         while self.running:
             if count < self.max_retries:
-                self.send_RREQ()
+                self.send_rreq()
                 time.sleep(self.interval)
             else:
                 # Max retries reached. Delete corresponding packets from rreq_list, stop the thread
@@ -94,12 +94,12 @@ class RreqRoutine(threading.Thread):
             count += 1
             
     # Generate and send RREQ
-    def send_RREQ(self):
-        RREQ = Messages.RouteRequest()
-        RREQ.src_ip = self.src_ip
-        RREQ.dst_ip = self.dst_ip
-        RREQ.dsn = 1
-        RREQ.hop_count = 1
+    def send_rreq(self):
+        rreq = Messages.RouteRequest()
+        rreq.src_ip = self.src_ip
+        rreq.dst_ip = self.dst_ip
+        rreq.dsn = 1
+        rreq.hop_count = 1
         
         # Prepare a dsr_header
         self.dsr_header.src_mac = self.node_mac
@@ -107,7 +107,7 @@ class RreqRoutine(threading.Thread):
 
         # self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(RREQ))
 
-        self.arq_handler.arq_send(RREQ, self.dsr_header, self.table.get_neighbors())
+        self.arq_handler.arq_send(rreq, self.dsr_header, self.table.get_neighbors())
 
         PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", str(self.dst_ip))
         

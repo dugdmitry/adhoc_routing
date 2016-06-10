@@ -230,6 +230,9 @@ class IncomingTrafficHandler(threading.Thread):
             # If the dsr packet contains RREQ or RREQ, or the ACK service messages (types 2, 3 and 5)
             elif dsr_type == 2 or dsr_type == 3 or dsr_type == 5:
                 # Handle RREQ / RREP / ACK
+
+                DATA_LOG.debug("Got service message. TYPE: %s", dsr_type)
+
                 self.service_msg_queue.put([dsr_header, raw_data])
 
             # If the packet is the broadcast one, either broadcast it further or drop it
@@ -300,7 +303,9 @@ class ServiceMessagesHandler(threading.Thread):
         while self.running:
             dsr_header, raw_data = self.service_msg_queue.get()
             data = pickle.loads(raw_data)
-            
+
+            DATA_LOG.debug("Message from service queue: %s", str(data))
+
             if isinstance(data, Messages.RouteRequest):
                 # Do something with incoming RREQ
                 DATA_LOG.info("Got RREQ: %s" % str(data))
@@ -365,7 +370,7 @@ class ServiceMessagesHandler(threading.Thread):
             new_dsr_header = self.gen_dsr_header(dsr_header, 3)         # Type 3 corresponds to RREP service message
 
             # Send the RREP reliably using arq_handler
-            self.arq_handler.arq_send(rrep, new_dsr_header, dsr_header.tx_mac)
+            self.arq_handler.arq_send(rrep, new_dsr_header, [dsr_header.tx_mac])
 
             # self.raw_transport.send_raw_frame(dsr_header.tx_mac, new_dsr_header, pickle.dumps(rrep))
 
@@ -423,7 +428,7 @@ class ServiceMessagesHandler(threading.Thread):
                 dsr_header.tx_mac = self.node_mac
 
                 # Forward the RREP reliably using arq_handler
-                self.arq_handler.arq_send(rrep, dsr_header, entry.next_hop_mac)
+                self.arq_handler.arq_send(rrep, dsr_header, [entry.next_hop_mac])
 
                 # self.raw_transport.send_raw_frame(entry.next_hop_mac, dsr_header, pickle.dumps(rrep))
 

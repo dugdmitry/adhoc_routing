@@ -37,6 +37,7 @@ class ArqHandler:
     # Now, the messages from the Messages module which have the unique ID field are supported (RREQ and RREP)
     def arq_send(self, message, dsr_header, dest_mac_list):
         for dst_address in dest_mac_list:
+            ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
             # Add an entry to msg_thread_map and create a ArqRouting thread
             hash_str = hash(str(message.id) + dst_address)
             lock.acquire()
@@ -63,9 +64,12 @@ class ArqHandler:
 
     # Generate and send the ACK on the given service message to the dst_mac
     def send_ack(self, message, dst_mac):
+
+        ARQ_HANDLER_LOG.info("Sending ACK back on the message %s", str(message))
+
         self.dsr_ack_header.dst_mac = dst_mac
         # Generate hash from the given message id
-        hash_str = str(message.id) + self.raw_transport.node_mac
+        hash_str = hash(str(message.id) + self.raw_transport.node_mac)
         # Create ACK message object
         ack_message = Messages.AckMessage(hash_str)
         # Send the message
@@ -117,7 +121,10 @@ class ArqRoutine(threading.Thread):
 
     # Send message (RREP or RREQ for now) with the dsr header to the dst_address
     def send_msg(self):
-        self.raw_transport.send_raw_frame(self.dst_address, self.dsr_header, pickle.dumps(self.serialized_message))
+
+        self.raw_transport.send_raw_frame(self.dst_address, self.dsr_header, self.serialized_message)
+
+        ARQ_HANDLER_LOG.debug("Sent raw frame on: %s", self.dst_address)
 
     def quit(self):
         self.running = False
