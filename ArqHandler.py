@@ -88,11 +88,6 @@ class ArqRoutine(threading.Thread):
 
         self.dsr_header = dsr_header
 
-        # # Create a dsr_header with the given type
-        # self.dsr_header = Messages.DsrHeader(message.dsr_type)
-        # self.dsr_header.src_mac = self.raw_transport.node_mac
-        # self.dsr_header.tx_mac = self.raw_transport.node_mac
-
         self.serialized_message = pickle.dumps(message)
         self.dst_address = dst_address
 

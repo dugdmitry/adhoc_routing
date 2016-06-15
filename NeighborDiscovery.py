@@ -31,6 +31,7 @@ class ProcessNeighbors:
         self.node_mac = node_mac
         
         self.expiry_interval = 60
+
         self.last_expiry_check = time.time()
         
     def process_neighbor(self, data):
@@ -118,13 +119,14 @@ class AdvertiseNeighbor(threading.Thread):
         
         self.message = Messages.HelloMessage()
         self.message.mac = node_mac
-        self.broadcast_mac = "ff:ff:ff:ff:ff:ff"
+        self.broadcast_mac = raw_transport_obj.broadcast_mac
         self.dsr_header = Messages.DsrHeader(1)   # Type 1 corresponds to the HELLO message
         self.dsr_header.src_mac = node_mac
         self.dsr_header.tx_mac = node_mac
         
         self.running = True
         self.broadcast_interval = 3
+
         self.app_transport = app_transport_obj
         self.raw_transport = raw_transport_obj
 
@@ -138,7 +140,7 @@ class AdvertiseNeighbor(threading.Thread):
         node_ips = self.app_transport.get_L3_addresses_from_interface()
         self.message.l3_addresses = node_ips
 
-        NEIGHBOR_LOG.info("Sending raw HELLO message")
+        NEIGHBOR_LOG.debug("Sending raw HELLO message")
 
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(self.message))
         self.message.retries += 1

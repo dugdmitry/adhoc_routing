@@ -47,8 +47,6 @@ class AppHandler(threading.Thread):
             # Check whether the destination IP exists in the Route Table
             entry = self.table.lookup_entry(dst_mac)
 
-            # print "DEST_IP:", dst_ip
-            
             if dst_ip[:2] == "ff" or dst_ip == "10.0.0.255":
                 # print "Multicast IPv6", dst_ip                          # ## IPv4 PACKETS GO UNCHECKED FOR NOW ## #
 
@@ -59,19 +57,14 @@ class AppHandler(threading.Thread):
                 # Put the dsr broadcast id to the broadcast_list
                 self.broadcast_list.append(dsr_header.broadcast_id)
 
-                # print "Trying to send the broadcast..."
-
                 DATA_LOG.debug("Trying to send the broadcast...")
 
                 # Broadcast it further to the network
                 self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
 
-                # print "Broadcast sent!!!"
-
                 DATA_LOG.debug("Broadcast sent!!!")
 
             elif entry is None:
-                # print "No such route in the table. Starting route discovery..."
 
                 DATA_LOG.info("No such route in the table. Starting route discovery...")
 
@@ -80,8 +73,6 @@ class AppHandler(threading.Thread):
                 self.wait_queue.put([src_ip, dst_ip, raw_data])
                 
             else:
-                # print "Found an entry:"
-                # self.table.print_entry(entry)
 
                 DATA_LOG.debug("Found an entry: %s", str(entry))
 
@@ -91,7 +82,6 @@ class AppHandler(threading.Thread):
                 # Send the raw data with dsr_header to the next hop
                 self.transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
 
-        # print "LOOP FINISHED!!!"
         DATA_LOG.debug("LOOP FINISHED!!!")
 
     def create_dsr_unicast_header(self, dst_mac):
@@ -130,7 +120,7 @@ class DataHandler:
         # Creating a queue for handling incoming RREQ and RREP packets from the raw_socket
         service_msg_queue = Queue.Queue()
         # Creating a deque list for keeping the received broadcast IDs
-        broadcast_list = deque(maxlen=1000000)  # Limit the max length of the list
+        broadcast_list = deque(maxlen=10000)  # Limit the max length of the list
 
         # Creating thread objects
         self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue,
@@ -292,7 +282,9 @@ class ServiceMessagesHandler(threading.Thread):
         self.service_msg_queue = service_msg_queue
         self.rrep_queue = rrep_queue  # Store the received RREP in queue for further handling by Path_Discovery thread
         
-        self.rreq_ids = []
+        self.rreq_ids = deque(maxlen=10000)  # Limit the max length of the list
+        self.rrep_ids = deque(maxlen=10000)  # Limit the max length of the list
+
         self.running = True
 
     def quit(self):
@@ -386,7 +378,8 @@ class ServiceMessagesHandler(threading.Thread):
 
             # Send the RREQ reliably using arq_handler to the list of current neighbors except the one who sent it
             dst_mac_list = self.table.get_neighbors()
-            dst_mac_list.remove(dsr_header.tx_mac)
+            if dsr_header.tx_mac in dst_mac_list:
+                dst_mac_list.remove(dsr_header.tx_mac)
 
             # Prepare a dsr_header
             dsr_header.tx_mac = self.node_mac
@@ -399,6 +392,16 @@ class ServiceMessagesHandler(threading.Thread):
     def rrep_handler(self, dsr_header, rrep):
         # Send back the ACK on the received RREP in ALL cases
         self.arq_handler.send_ack(rrep, dsr_header.tx_mac)
+
+        if rrep.id in self.rrep_ids:
+            # Send the ACK back anyway, but do nothing with the message itself
+            DATA_LOG.info("The RREP with this ID has been already processed. Sending the ACK back.")
+
+            return 0
+
+        DATA_LOG.info("Processing RREP...")
+
+        self.rrep_ids.append(rrep.id)
 
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)

@@ -6,13 +6,12 @@ Created on Sep 30, 2014
 """
 
 from time import time
-import routing_logging
 
+import routing_logging
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
 
 
-# Test master branch
 class Entry:
     def __init__(self, dst_mac, next_hop_mac, n_hops):
         self.dst_mac = dst_mac                                  # MAC address of destination node
@@ -20,7 +19,7 @@ class Entry:
         self.n_hops = n_hops                                    # Number of hops to destination
         self.last_activity = time()                             # Timestamp of the last activity
         self.timeout = 120                                      # Timeout in seconds upon deleting an entry
-        
+
     def __eq__(self, other):
         return (self.dst_mac == other.dst_mac and
                 self.next_hop_mac == other.next_hop_mac and self.n_hops == other.n_hops)
@@ -41,6 +40,7 @@ class Table:
         
     # Add an entry to the route table and the arp_table
     def add_entry(self, dst_mac, next_hop_mac, n_hops):
+
         # Create new route entry object
         entry = Entry(dst_mac, next_hop_mac, n_hops)
         if dst_mac in self.entries:
@@ -59,13 +59,16 @@ class Table:
             TABLE_LOG.info("New entry has been added. Table updated.")
 
             self.print_table()
+
         return entry
-    
+
     def update_arp_table(self, ip, mac):
-            self.arp_table.update({ip: mac})
-    
+
+        self.arp_table.update({ip: mac})
+
     # Delete all entries where next_hop_mac matches the given mac
     def del_entries(self, mac):
+
         entries_to_delete = {}
         for dst_mac in self.entries:
             entries_to_delete.update({dst_mac: []})
@@ -94,12 +97,15 @@ class Table:
                 if entry.n_hops == 1:
                     neighbors_list.append(entry.next_hop_mac)
 
+        TABLE_LOG.info("Got list of neighbors: %s", neighbors_list)
+
         return neighbors_list
 
     # Print all entries of the route table to a file
     def print_table(self):
         f = open("table.txt", "w")
         f.write("-" * 90 + "\n")
+
         for dst_mac in self.entries:
             f.write("Towards destination MAC: %s \n" % dst_mac)
             f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>\n")
@@ -119,29 +125,37 @@ class Table:
     # Returns an entry with a given dest_ip and ID
     def get_entry_by_ID(self, dest_ip, ID):
         IDs = []
+
         if dest_ip in self.entries:
             for d in self.entries[dest_ip]:
                 IDs.append(d.id)
 
-        return self.entries[dest_ip][IDs.index(ID)]
-    
+        output_list = self.entries[dest_ip][IDs.index(ID)]
+
+        return output_list
+
     # Check the dst_ip in arp_table and in the route_table
     def lookup_mac_address(self, dst_ip):
         # Check the arp table
         if dst_ip in self.arp_table:
-            return self.arp_table[dst_ip]
+            output = self.arp_table[dst_ip]
         else:
-            return None
+            output = None
+
+        return output
     
     def lookup_entry(self, dst_mac):
         if dst_mac == None:
             return None
+
         if dst_mac in self.entries:
             # Checking the age of the route entry
             self.check_expiry(dst_mac)
-            return self.select_route(dst_mac)
+            output = self.select_route(dst_mac)
         else:
-            return None
+            output = None
+
+        return output
     
     # Returns an entry with min amount of hops to the destination MAC address
     def select_route(self, dst_mac):
@@ -161,13 +175,15 @@ class Table:
         entries_to_delete = []
         if dst_mac in self.entries:
             for ent in self.entries[dst_mac]:
-                if (time() - ent.last_activity) > ent.timeout:
+                if ((time() - ent.last_activity) > ent.timeout) and ent.n_hops != 1:
                     entries_to_delete.append(ent)
             for ent in entries_to_delete:
                 self.entries[dst_mac].remove(ent)
             # If the list becomes empty, then delete it
             if self.entries[dst_mac] == []:
                 del self.entries[dst_mac]
+
+            self.print_table()
 
         else:
             TABLE_LOG.warning("This should never happen: RouteTable.check_expiry(dst_mac)")

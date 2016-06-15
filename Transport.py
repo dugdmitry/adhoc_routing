@@ -139,7 +139,7 @@ class VirtualTransport:
             addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
         except IOError:
             # No IPv4 address was assigned"
-            TRANSPORT_LOG.warning("No IPv4 address assigned!")
+            TRANSPORT_LOG.debug("No IPv4 address assigned!")
             return None
 
         return socket.inet_ntoa(addr)
@@ -162,7 +162,7 @@ class VirtualTransport:
             return output
         else:
             # No IPv6 addresses were assigned"
-            TRANSPORT_LOG.warning("No IPv6 address assigned!")
+            TRANSPORT_LOG.debug("No IPv6 address assigned!")
 
             return [None]
         
