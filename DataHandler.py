@@ -45,7 +45,9 @@ class AppHandler(threading.Thread):
             dst_mac = self.table.lookup_mac_address(dst_ip)
             
             # Check whether the destination IP exists in the Route Table
+            lock.acquire()
             entry = self.table.lookup_entry(dst_mac)
+            lock.release()
 
             if dst_ip[:2] == "ff" or dst_ip == "10.0.0.255":
                 # print "Multicast IPv6", dst_ip                          # ## IPv4 PACKETS GO UNCHECKED FOR NOW ## #
@@ -107,9 +109,6 @@ class AppHandler(threading.Thread):
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
     def __init__(self, app_transport, app_queue, hello_msg_queue, raw_transport, table):
-        # ## Creating a socket object for exchanging service messages
-        # service_transport = Transport.ServiceTransport(table.node_ip, 3001)
-
         # Create an arq handler object
         arq_handler = ArqHandler.ArqHandler(raw_transport)
 
@@ -199,7 +198,9 @@ class IncomingTrafficHandler(threading.Thread):
 
                 # Else, try to find the next hop in the route table
                 else:
+                    lock.acquire()
                     entry = self.table.lookup_entry(dst_mac)
+                    lock.release()
                     # If no entry is found, put the packet to the initial AppQueue
                     if entry is None:
                         # Get src_ip and dst_ip from the raw_data
@@ -340,9 +341,13 @@ class ServiceMessagesHandler(threading.Thread):
 
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        lock.acquire()
         self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
+        lock.release()
         # Update arp_table
+        lock.acquire()
         self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
+        lock.release()
         
         # Get a list of currently assigned ip addresses to the node
         node_ips = self.app_transport.get_L3_addresses_from_interface()
@@ -406,17 +411,23 @@ class ServiceMessagesHandler(threading.Thread):
         # Adding entries in route table:
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
         # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        lock.acquire()
         self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
+        lock.release()
         # Update arp_table
+        lock.acquire()
         self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
         self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
+        lock.release()
         
         if dsr_header.dst_mac != self.node_mac:
             # Forward RREP further
             DATA_LOG.info("Forwarding RREP further. RREP_ID: %s", str(rrep.id))
 
             # Find the entry in route table, corresponding to a given RREQ(RREP) id
+            lock.acquire()
             entry = self.table.lookup_entry(dsr_header.dst_mac)
+            lock.release()
             
             # If no entry is found. Just do nothing.
             if entry is None:

@@ -12,6 +12,7 @@ import pickle
 
 import routing_logging
 
+lock = threading.Lock()
 
 NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery")
 
@@ -88,12 +89,23 @@ class ProcessNeighbors:
         NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(data.mac))
         
         # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+
+        lock.acquire()
+
         self.table.add_entry(data.mac, data.mac, 1)
-        
+
+        lock.release()
+
         return True
     
     def del_neighbor_entry(self, mac):
+
+        lock.acquire()
+
         self.table.del_entries(mac)
+
+        lock.release()
+
         return True
 
 
