@@ -25,7 +25,7 @@ ARQ_HANDLER_LOG = routing_logging.create_routing_log("routing.arq_handler.log", 
 # Main object which sends data and processes corresponding ACKs
 class ArqHandler:
     def __init__(self, raw_transport):
-        # Prepare ack dsh header object
+        # Prepare ack dsr header object
         self.dsr_ack_header = Messages.DsrHeader(5)                      # 5 corresponds to ACK dsr header type
         self.dsr_ack_header.src_mac = raw_transport.node_mac
         self.dsr_ack_header.tx_mac = raw_transport.node_mac
@@ -60,7 +60,6 @@ class ArqHandler:
         else:
             # If no such hash in the map, just ignore it, and do nothing
             ARQ_HANDLER_LOG.info("No such ACK with this hash!!! Do nothing...")
-            pass
 
     # Generate and send the ACK on the given service message to the dst_mac
     def send_ack(self, message, dst_mac):

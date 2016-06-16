@@ -151,8 +151,6 @@ class DataHandler:
         self.incoming_traffic_handler_thread._Thread__stop()
         self.path_discovery_thread._Thread__stop()
         self.service_messages_handler_thread._Thread__stop()
-        
-        # print "Traffic handlers are stopped"
 
         DATA_LOG.info("Traffic handlers are stopped")
 
@@ -187,14 +185,10 @@ class IncomingTrafficHandler(threading.Thread):
                 dst_mac = dsr_header.dst_mac
                 # If the dst_ip matches the node's ip, send data to the App
                 if dst_mac == self.table.node_mac:
-                    # print "Sending data to the App..."
 
                     DATA_LOG.debug("Sending data to the App...")
 
                     self.send_up(raw_data)
-                # elif dst_mac == self.broadcast_mac:
-                #     # Send the ipv4 broadcast/multicast or ipv6 multicast packet up to the application
-                #     self.send_up(raw_data)
 
                 # Else, try to find the next hop in the route table
                 else:
@@ -228,27 +222,21 @@ class IncomingTrafficHandler(threading.Thread):
 
             # If the packet is the broadcast one, either broadcast it further or drop it
             elif dsr_type == 4:
-                # print "Received broadcast TTL:", dsr_header.broadcast_ttl
 
                 DATA_LOG.debug("Received broadcast TTL: %s", dsr_header.broadcast_ttl)
 
                 # Check whether the packet with this particular broadcast_id has been previously received
                 if dsr_header.broadcast_id in self.broadcast_list:
-                    # print "Dropped broadcast id:", dsr_header.broadcast_id
 
+                    # Just ignore it
                     DATA_LOG.debug("Dropped broadcast id: %s", dsr_header.broadcast_id)
 
-                    # Just ignore it
-                    # print "Ignoring the broadcast"
-                    pass
                 # Check whether the broadcast packet has reached the maximum established broadcast ttl
                 elif dsr_header.broadcast_ttl > self.max_broadcast_ttl:
-                    # Just ignore it
-                    # print "Ignoring the broadcast"
 
+                    # Just ignore it
                     DATA_LOG.debug("Dropped broadcast id due to max_ttl: %s", dsr_header.broadcast_id)
 
-                    pass
                 else:
                     # print "Accepting the broadcast"
 
