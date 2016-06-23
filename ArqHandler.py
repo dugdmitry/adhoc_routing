@@ -38,7 +38,7 @@ class ArqHandler:
     def arq_send(self, message, dsr_header, dest_mac_list):
         for dst_address in dest_mac_list:
             ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
-            # Add an entry to msg_thread_map and create a ArqRouting thread
+            # Add an entry to msg_thread_map and create a ArqRoutine thread
             hash_str = hash(str(message.id) + dst_address)
             lock.acquire()
             self.msg_thread_map[hash_str] = ArqRoutine(hash_str, self.msg_thread_map,
