@@ -100,8 +100,10 @@ class RreqRoutine(threading.Thread):
                 PATH_DISCOVERY_LOG.info("Maximum retries reached!!! Deleting the thread...")
 
                 lock.acquire()
-                del self.rreq_list[self.dst_ip]
-                del self.rreq_thread_list[self.dst_ip]
+                if self.rreq_list.get(self.dst_ip):
+                    del self.rreq_list[self.dst_ip]
+                if self.rreq_thread_list.get(self.dst_ip):
+                    del self.rreq_thread_list[self.dst_ip]
                 lock.release()
 
                 # Stop the thread
