@@ -106,7 +106,8 @@ class ArqRoutine(threading.Thread):
                 ARQ_HANDLER_LOG.info("Maximum ARQ retries reached!!! Deleting the ARQ thread...")
 
                 lock.acquire()
-                del self.msg_thread_map[self.hash_str]
+                if self.msg_thread_map.get(self.hash_str):
+                    del self.msg_thread_map[self.hash_str]
                 lock.release()
                 # Stop the thread
                 self.quit()
