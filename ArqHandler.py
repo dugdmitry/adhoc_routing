@@ -55,7 +55,8 @@ class ArqHandler:
             self.msg_thread_map[hash_str].quit()
             # Delete the entry
             lock.acquire()
-            del self.msg_thread_map[hash_str]
+            if self.msg_thread_map.get(hash_str):
+                del self.msg_thread_map[hash_str]
             lock.release()
         else:
             # If no such hash in the map, just ignore it, and do nothing
