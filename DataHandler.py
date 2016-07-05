@@ -48,10 +48,48 @@ class AppHandler(threading.Thread):
             entry = self.table.lookup_entry(dst_mac)
             lock.release()
 
-            if dst_ip[:2] == "ff" or dst_ip == "10.0.0.255":
-                # print "Multicast IPv6", dst_ip                          # ## IPv4 PACKETS GO UNCHECKED FOR NOW ## #
+            # Check if the packet's destination address is IPv6 multicast
+            # Always starts from "ff0X::",
+            # see https://en.wikipedia.org/wiki/IPv6_address#Multicast_addresses
+            if dst_ip[:2] == "ff":
 
                 DATA_LOG.info("Multicast IPv6: %s", dst_ip)
+
+                # Create a broadcast dsr header
+                dsr_header = self.create_dsr_broadcast_header()
+                # Put the dsr broadcast id to the broadcast_list
+                self.broadcast_list.append(dsr_header.broadcast_id)
+
+                DATA_LOG.debug("Trying to send the broadcast...")
+
+                # Broadcast it further to the network
+                self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+
+                DATA_LOG.debug("Broadcast sent!!!")
+
+            # Check if the packet's destination address is IPv4 multicast or broadcast.
+            # The IPv4 multicasts start with either 224.x.x.x or 239.x.x.x
+            # See: https://en.wikipedia.org/wiki/Multicast_address#IPv4
+            elif dst_ip[:3] == "224" or dst_ip[:3] == "239":
+                DATA_LOG.info("Multicast IPv4: %s", dst_ip)
+
+                # Create a broadcast dsr header
+                dsr_header = self.create_dsr_broadcast_header()
+                # Put the dsr broadcast id to the broadcast_list
+                self.broadcast_list.append(dsr_header.broadcast_id)
+
+                DATA_LOG.debug("Trying to send the broadcast...")
+
+                # Broadcast it further to the network
+                self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+
+                DATA_LOG.debug("Broadcast sent!!!")
+
+            # Check if the packet's destination address is IPv4 broadcast.
+            # The IPv4 broadcasts ends with .255
+            # See: https://en.wikipedia.org/wiki/IP_address#Broadcast_addressing
+            elif dst_ip[-3:] == "255":
+                DATA_LOG.info("Broadcast IPv4: %s", dst_ip)
 
                 # Create a broadcast dsr header
                 dsr_header = self.create_dsr_broadcast_header()
@@ -237,8 +275,7 @@ class IncomingTrafficHandler(threading.Thread):
                     DATA_LOG.debug("Dropped broadcast id due to max_ttl: %s", dsr_header.broadcast_id)
 
                 else:
-                    # print "Accepting the broadcast"
-
+                    # Accept and forward the broadcast further
                     DATA_LOG.debug("Accepting the broadcast: %s", dsr_header.broadcast_id)
 
                     # Send this ipv4 broadcast/multicast or ipv6 multicast packet up to the application
