@@ -20,7 +20,6 @@ lock = threading.Lock()
 
 # Set up logging
 DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler")
-# DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "root.data_handler", LOG_LEVEL)
 
 
 class AppHandler(threading.Thread):
