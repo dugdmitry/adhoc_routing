@@ -15,6 +15,7 @@ import threading
 from collections import deque
 
 import routing_logging
+from conf import MONITORING_MODE_FLAG
 
 lock = threading.Lock()
 
@@ -196,6 +197,11 @@ class IncomingTrafficHandler(threading.Thread):
     def __init__(self, app_queue, service_msg_queue, hello_msg_queue,
                  app_transport, raw_transport, table, broadcast_list):
         super(IncomingTrafficHandler, self).__init__()
+        # Check the MONITORING_MODE_FLAG.
+        # If True - override the self.handle_data_packet method for working in the monitoring mode.
+        if MONITORING_MODE_FLAG:
+            self.handle_data_packet = self.handle_data_packet_monitoring_mode
+
         self.running = True
         self.app_transport = app_transport
         self.raw_transport = raw_transport
@@ -206,7 +212,7 @@ class IncomingTrafficHandler(threading.Thread):
         self.broadcast_list = broadcast_list
         self.broadcast_mac = raw_transport.broadcast_mac
         self.max_broadcast_ttl = 1          # Set a maximum number of hops a broadcast frame can be forwarded over
-        
+
     def run(self):
         while self.running:
 
@@ -214,35 +220,9 @@ class IncomingTrafficHandler(threading.Thread):
 
             dsr_type = dsr_header.type
 
-            # Check the dst_ip from dsr_header. If it matches the node's own ip -> send it up to the virtual interface
-            # If the packet carries the data, either send it to the next hop, or,
-            # if there is no such one, put it to the AppQueue, or,
-            # if the dst_mac equals to the node's mac, send the packet up to the application
+            # If it's a data packet, handle it accordingly
             if dsr_type == 0:
-                dst_mac = dsr_header.dst_mac
-                # If the dst_ip matches the node's ip, send data to the App
-                if dst_mac == self.table.node_mac:
-
-                    DATA_LOG.debug("Sending data to the App...")
-
-                    self.send_up(raw_data)
-
-                # Else, try to find the next hop in the route table
-                else:
-                    lock.acquire()
-                    entry = self.table.lookup_entry(dst_mac)
-                    lock.release()
-                    # If no entry is found, put the packet to the initial AppQueue
-                    if entry is None:
-                        # Get src_ip and dst_ip from the raw_data
-                        ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
-                        self.app_queue.put([ips[0], ips[1], raw_data])
-
-                    # Else, forward the packet to the next_hop
-                    else:
-                        next_hop_mac = entry.next_hop_mac
-                        # Send the raw data with dsr_header to the next hop
-                        self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
+                self.handle_data_packet(dsr_header, raw_data)
 
             # If the dsr packet contains HELLO message from the neighbour
             elif dsr_type == 1:
@@ -262,34 +242,83 @@ class IncomingTrafficHandler(threading.Thread):
 
                 DATA_LOG.debug("Received broadcast TTL: %s", dsr_header.broadcast_ttl)
 
-                # Check whether the packet with this particular broadcast_id has been previously received
-                if dsr_header.broadcast_id in self.broadcast_list:
+                self.handle_broadcast_packet(dsr_header, raw_data)
 
-                    # Just ignore it
-                    DATA_LOG.debug("Dropped broadcast id: %s", dsr_header.broadcast_id)
+    # Check the dst_mac from dsr_header. If it matches the node's own mac -> send it up to the virtual interface
+    # If the packet carries the data, either send it to the next hop, or,
+    # if there is no such one, put it to the AppQueue, or,
+    # if the dst_mac equals to the node's mac, send the packet up to the application
+    def handle_data_packet(self, dsr_header, raw_data):
+        dst_mac = dsr_header.dst_mac
+        # If the dst_mac matches the node's mac, send data to the App
+        if dst_mac == self.table.node_mac:
 
-                # Check whether the broadcast packet has reached the maximum established broadcast ttl
-                elif dsr_header.broadcast_ttl > self.max_broadcast_ttl:
+            DATA_LOG.debug("Sending data to the App...")
 
-                    # Just ignore it
-                    DATA_LOG.debug("Dropped broadcast id due to max_ttl: %s", dsr_header.broadcast_id)
+            self.send_up(raw_data)
 
-                else:
-                    # Accept and forward the broadcast further
-                    DATA_LOG.debug("Accepting the broadcast: %s", dsr_header.broadcast_id)
+        # Else, try to find the next hop in the route table
+        else:
+            lock.acquire()
+            entry = self.table.lookup_entry(dst_mac)
+            lock.release()
+            # If no entry is found, put the packet to the initial AppQueue
+            if entry is None:
+                # Get src_ip and dst_ip from the raw_data
+                ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
+                self.app_queue.put([ips[0], ips[1], raw_data])
 
-                    # Send this ipv4 broadcast/multicast or ipv6 multicast packet up to the application
-                    self.send_up(raw_data)
-                    # Put it to the broadcast list
-                    self.broadcast_list.append(dsr_header.broadcast_id)
-                    # Increment broadcast ttl and send the broadcast the packet further
-                    dsr_header.broadcast_ttl += 1
-                    self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+            # Else, forward the packet to the next_hop
+            else:
+                next_hop_mac = entry.next_hop_mac
+                # Send the raw data with dsr_header to the next hop
+                self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
+
+    # Handle data packet, if in monitoring mode. If the dst_mac is the mac of the receiving node,
+    # send the packet up to the application, otherwise, discard the packet
+    def handle_data_packet_monitoring_mode(self, dsr_header, raw_data):
+        dst_mac = dsr_header.dst_mac
+        # If the dst_mac matches the node's mac, send data to the App
+        if dst_mac == self.table.node_mac:
+
+            DATA_LOG.debug("Sending data to the App...")
+
+            self.send_up(raw_data)
+
+        # In all other cases, discard the packet
+        else:
+            DATA_LOG.debug("This data packet is not for me. Discarding the data packet, since in Monitoring Mode.")
+
+    # Check the broadcast_ttl with the defined max value, and either drop or forward it, accordingly
+    def handle_broadcast_packet(self, dsr_header, raw_data):
+        # Check whether the packet with this particular broadcast_id has been previously received
+        if dsr_header.broadcast_id in self.broadcast_list:
+
+            # Just ignore it
+            DATA_LOG.debug("Dropped broadcast id: %s", dsr_header.broadcast_id)
+
+        # Check whether the broadcast packet has reached the maximum established broadcast ttl
+        elif dsr_header.broadcast_ttl > self.max_broadcast_ttl:
+
+            # Just ignore it
+            DATA_LOG.debug("Dropped broadcast id due to max_ttl: %s", dsr_header.broadcast_id)
+
+        else:
+            # Accept and forward the broadcast further
+            DATA_LOG.debug("Accepting the broadcast: %s", dsr_header.broadcast_id)
+
+            # Send this ipv4 broadcast/multicast or ipv6 multicast packet up to the application
+            self.send_up(raw_data)
+            # Put it to the broadcast list
+            self.broadcast_list.append(dsr_header.broadcast_id)
+            # Increment broadcast ttl and send the broadcast the packet further
+            dsr_header.broadcast_ttl += 1
+            self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
 
     # Send the raw data up to virtual interface
     def send_up(self, raw_data):
         self.app_transport.send_to_app(raw_data)
-        
+
     def quit(self):
         self.running = False
 
@@ -297,6 +326,12 @@ class IncomingTrafficHandler(threading.Thread):
 class ServiceMessagesHandler(threading.Thread):
     def __init__(self, route_table, app_transport, raw_transport, arq_handler, rrep_queue, service_msg_queue):
         super(ServiceMessagesHandler, self).__init__()
+        # Check the MONITORING_MODE_FLAG.
+        # If True - override the self.rreq_handler and self.rrep_handler methods for working in the monitoring mode.
+        if MONITORING_MODE_FLAG:
+            self.rreq_handler = self.rreq_handler_monitoring_mode
+            self.rrep_handler = self.rrep_handler_monitoring_mode
+
         self.table = route_table
         self.raw_transport = raw_transport
         self.app_transport = app_transport
@@ -415,8 +450,61 @@ class ServiceMessagesHandler(threading.Thread):
 
             self.arq_handler.arq_send(rreq, dsr_header, dst_mac_list)
 
-            # # Send the broadcast frame with RREQ object
-            # self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, pickle.dumps(rreq))
+    # Handle RREQs if in Monitoring Mode. Process only the RREQs, which have been sent for them (dst_ip in node_ips)
+    # Do not forward any other RREQs further.
+    def rreq_handler_monitoring_mode(self, dsr_header, rreq):
+        # Send back the ACK on the received RREQ in ALL cases
+        self.arq_handler.send_ack(rreq, dsr_header.tx_mac)
+
+        if rreq.id in self.rreq_ids:
+            # Send the ACK back anyway, but do nothing with the message itself
+            DATA_LOG.info("The RREQ with this ID has been already processed. Sending the ACK back.")
+
+            return 0
+
+        DATA_LOG.info("Processing RREQ")
+
+        self.rreq_ids.append(rreq.id)
+
+        # Adding entries in route table:
+        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        lock.acquire()
+        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
+        lock.release()
+        # Update arp_table
+        lock.acquire()
+        self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
+        lock.release()
+
+        # Get a list of currently assigned ip addresses to the node
+        node_ips = self.app_transport.get_L3_addresses_from_interface()
+
+        if rreq.dst_ip in node_ips:
+
+            DATA_LOG.info("Processing the RREQ, generating and sending back the RREP")
+
+            # Generate and send RREP back to the source
+            rrep = Messages.RouteReply()
+            rrep.src_ip = rreq.dst_ip
+            rrep.dst_ip = rreq.src_ip
+            rrep.hop_count = 1
+            rrep.id = rreq.id
+
+            # Prepare a dsr_header
+            new_dsr_header = self.gen_dsr_header(dsr_header, 3)         # Type 3 corresponds to RREP service message
+
+            # Send the RREP reliably using arq_handler
+            self.arq_handler.arq_send(rrep, new_dsr_header, [dsr_header.tx_mac])
+
+            # self.raw_transport.send_raw_frame(dsr_header.tx_mac, new_dsr_header, pickle.dumps(rrep))
+
+            DATA_LOG.debug("Generated RREP: %s", str(rrep))
+            DATA_LOG.debug("RREQ.dst_ip: %s", str(rreq.dst_ip))
+
+        # If the dst_ip is not for this node, discard the RREQ
+        else:
+
+            DATA_LOG.info("This RREQ is not for me. Discarding RREQ, since in Monitoring Mode.")
 
     def rrep_handler(self, dsr_header, rrep):
         # Send back the ACK on the received RREP in ALL cases
@@ -468,14 +556,51 @@ class ServiceMessagesHandler(threading.Thread):
                 # Forward the RREP reliably using arq_handler
                 self.arq_handler.arq_send(rrep, dsr_header, [entry.next_hop_mac])
 
-                # self.raw_transport.send_raw_frame(entry.next_hop_mac, dsr_header, pickle.dumps(rrep))
-
         else:
 
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
 
             # Put RREP in rrep_queue
             self.rrep_queue.put(rrep.src_ip)
+
+    # Handle incoming RREPs while in Monitoring Mode.
+    # Receive the RREPs, which have been sent to this node, discard all other RREPs.
+    def rrep_handler_monitoring_mode(self, dsr_header, rrep):
+        # Send back the ACK on the received RREP in ALL cases
+        self.arq_handler.send_ack(rrep, dsr_header.tx_mac)
+
+        if rrep.id in self.rrep_ids:
+            # Send the ACK back anyway, but do nothing with the message itself
+            DATA_LOG.info("The RREP with this ID has been already processed. Sending the ACK back.")
+
+            return 0
+
+        DATA_LOG.info("Processing RREP...")
+
+        self.rrep_ids.append(rrep.id)
+
+        # Adding entries in route table:
+        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        lock.acquire()
+        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
+        lock.release()
+        # Update arp_table
+        lock.acquire()
+        self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
+        self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
+        lock.release()
+
+        if dsr_header.dst_mac == self.node_mac:
+
+            DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
+
+            # Put RREP in rrep_queue
+            self.rrep_queue.put(rrep.src_ip)
+
+        # Otherwise, discard the RREP
+        else:
+            DATA_LOG.info("This RREP is not for me. Discarding RREP, since in Monitoring Mode.")
 
     # Handling incoming ack messages
     def ack_handler(self, ack):
