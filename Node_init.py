@@ -191,7 +191,8 @@ class RoutingDaemon(Daemon):
         # Creating a queue for handling HELLO messages from the NeighborDiscovery
         hello_msg_queue = Queue.Queue()
         # Create a Neighbor routine thread
-        neighbor_routine = NeighborDiscovery.NeighborDiscovery(node_mac, app_transport, raw_transport, table, hello_msg_queue)
+        neighbor_routine = NeighborDiscovery.NeighborDiscovery(node_mac, app_transport,
+                                                               raw_transport, table, hello_msg_queue)
         # Create app_data handler thread
         data_handler = DataHandler.DataHandler(app_transport, app_queue, hello_msg_queue, raw_transport, table)
         # Creating thread for live configuration / interaction with the running program
