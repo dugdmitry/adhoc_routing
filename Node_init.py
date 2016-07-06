@@ -66,6 +66,7 @@ class Daemon:
 
         # decouple from parent environment
         # os.chdir("/")
+        os.chdir(ABSOLUTE_PATH)
         os.setsid()
         os.umask(0)
 
