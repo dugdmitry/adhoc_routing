@@ -5,12 +5,14 @@ It also performs all log writing operations in a single thread, while receiving 
 """
 
 import os
-import sys
 import threading
 import Queue
 import logging
 from logging.handlers import RotatingFileHandler
 from conf import ABSOLUTE_PATH, LOG_LEVEL
+
+# Define a global list, containing the logging thread objects, initialized in different modules
+LOG_THREAD_LIST = []
 
 # Set a global variable LOG_LEVEL according to the string variable in conf file
 # Log levels correspond to standard levels defined in the "logging" module
@@ -39,49 +41,36 @@ class LoggingHandler(threading.Thread):
 
     # Get the log message and its arguments from the queue, write them to the log instance
     def run(self):
+        self.info("LOGGING SESSION INITIATED: %s", self.logging_instance.name)
         while self.running:
-            try:
-                loglevel, msg, args, kwargs = self.logging_queue.get()
+            loglevel, msg, args, kwargs = self.logging_queue.get()
 
-                print loglevel, msg, args, kwargs
+            if loglevel == logging.INFO:
+                self.logging_instance.info(msg, *args, **kwargs)
 
-                if loglevel == logging.INFO:
-                    self.logging_instance.info(msg, *args, **kwargs)
+            elif loglevel == logging.DEBUG:
+                self.logging_instance.debug(msg, *args, **kwargs)
 
-                elif loglevel == logging.DEBUG:
-                    self.logging_instance.debug(msg, *args, **kwargs)
+            elif loglevel == logging.ERROR:
+                self.logging_instance.error(msg, *args, **kwargs)
 
-                elif loglevel == logging.ERROR:
-                    self.logging_instance.error(msg, *args, **kwargs)
+            elif loglevel == logging.WARNING:
+                self.logging_instance.warning(msg, *args, **kwargs)
 
-                elif loglevel == logging.WARNING:
-                    self.logging_instance.warning(msg, *args, **kwargs)
+            elif loglevel == logging.CRITICAL:
+                self.logging_instance.critical(msg, *args, **kwargs)
 
-                elif loglevel == logging.CRITICAL:
-                    self.logging_instance.critical(msg, *args, **kwargs)
-
-                else:
-                    self.logging_instance.info(msg, *args, **kwargs)
-
-            except:
-                e = sys.exc_info()[0]
-                print "Caught some exception!!! %s" % e
-
-            print "END OF ITERATION"
+            # If some invalid loglevel, write to INFO loglevel
+            else:
+                self.logging_instance.info(msg, *args, **kwargs)
 
     # Define callbacks which will be used by other modules to send their logging messages to
     def info(self, msg, *args, **kwargs):
         loglevel = logging.INFO
-
-        # print loglevel, msg, args, kwargs
-
         self.logging_queue.put((loglevel, msg, args, kwargs))
 
     def debug(self, msg, *args, **kwargs):
         loglevel = logging.DEBUG
-
-        # print loglevel, msg, args, kwargs
-
         self.logging_queue.put((loglevel, msg, args, kwargs))
 
     def error(self, msg, *args, **kwargs):
@@ -98,10 +87,7 @@ class LoggingHandler(threading.Thread):
 
     def quit(self):
         self.running = False
-        self._Thread__stop()
-
-    def __del__(self):
-        print "Thread is deleted!"
+        self.info("LOGGING SESSION FINISHED: %s", self.logging_instance.name)
 
 
 # Create a single logging instance and output a thread object which will receiving incoming logging messages
@@ -127,9 +113,7 @@ def create_routing_log(log_name, log_hierarchy):
     if routing_log.handlers:
         # Create and start the log handling thread object
         logging_handler_thread = LoggingHandler(routing_log)
-        print "Starting logging thread...", log_hierarchy
-        logging_handler_thread.start()
-        print "logging thread started!!!", log_hierarchy
+        LOG_THREAD_LIST.append(logging_handler_thread)
 
         return logging_handler_thread
 
@@ -138,8 +122,18 @@ def create_routing_log(log_name, log_hierarchy):
 
     # Create and start the log handling thread object
     logging_handler_thread = LoggingHandler(routing_log)
-    print "Starting logging thread...", log_hierarchy
-    logging_handler_thread.start()
-    print "logging thread started!!!", log_hierarchy
+    LOG_THREAD_LIST.append(logging_handler_thread)
 
     return logging_handler_thread
+
+
+# Start all threads in LOG_THREAD_LIST
+def start_all_log_threads():
+    for log_thread in LOG_THREAD_LIST:
+        log_thread.start()
+
+
+# Stop all threads in LOG_THREAD_LIST
+def stop_all_log_threads():
+    for log_thread in LOG_THREAD_LIST:
+        log_thread.quit()
