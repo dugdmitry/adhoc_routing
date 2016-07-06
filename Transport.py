@@ -18,6 +18,8 @@ from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
 
 TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
 TRANSPORT_LOG.info("INITIALIZING TRANSPORT...")
+TRANSPORT_LOG.info("INITIALIZING TRANSPORT2...")
+TRANSPORT_LOG.info("INITIALIZING TRANSPORT3...")
 
 # Syscall ids for managing network interfaces via ioctl
 TUNSETIFF = 0x400454ca

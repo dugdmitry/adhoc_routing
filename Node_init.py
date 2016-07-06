@@ -54,6 +54,9 @@ class Routing:
         return 0
     
     def run(self):
+
+        ROUTING_LOG.info("Running the routing instance...")
+
         # Get initial parameters from settings files
         self.get_parameters()
         # Creating a transport for communication with a virtual interface
@@ -287,6 +290,9 @@ class RoutingDaemon:
             return 0
         else:
             # Create and run routing daemon
+
+            ROUTING_LOG.info("Creating routing daemon...")
+
             self.create_daemon()
     
     def stop(self):
@@ -322,6 +328,10 @@ if __name__ == "__main__":
     daemon = RoutingDaemon()
     # Creating unix domain client for sending commands
     uds_client = Transport.UdsClient(UDS_ADDRESS)
+    # Create the routing instance
+    routing = Routing()
+    # routing.run()
+
     # ## Correctly parse input arguments and options ## #
     try:
         opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "set_ipv4=", "set_ipv6="])
@@ -343,7 +353,7 @@ if __name__ == "__main__":
                 ROUTING_LOG.info("Unknown command.")
                 print "Unknown command."
 
-        # If an option is set, assign the given ip address to the app_trasport
+        # If an option is set, assign the given ip address to the app_transport
         else:
             for opt, arg in opts:
                 if opt in ("-h", "--help"):

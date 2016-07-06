@@ -14,6 +14,9 @@ import routing_logging
 lock = threading.Lock()
 
 PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery")
+PATH_DISCOVERY_LOG.info("INITIALIZING PATH_DISCOVERY...")
+PATH_DISCOVERY_LOG.info("INITIALIZING PATH_DISCOVERY2...")
+PATH_DISCOVERY_LOG.info("INITIALIZING PATH_DISCOVERY3...")
 
 
 class PathDiscoveryHandler(threading.Thread):
