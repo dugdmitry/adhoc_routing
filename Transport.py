@@ -17,7 +17,7 @@ from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
 
 
 TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
-TRANSPORT_LOG.info("INITIALIZING TRANSPORT...")
+
 
 # Syscall ids for managing network interfaces via ioctl
 TUNSETIFF = 0x400454ca
@@ -95,6 +95,7 @@ class UdsServer(threading.Thread):
         
     def quit(self):
         self.running = False
+        self._Thread__stop()
         # Removing the uds socket
         os.system("rm %s" % self.server_address)
 
@@ -237,6 +238,20 @@ class RawTransport:
         # For receiving handlers
         self.recv_socket = self.send_socket
 
+        # Define which self.recv_data method will be used, depending on the SET_TOPOLOGY_FLAG flag value
+        if SET_TOPOLOGY_FLAG:
+            self.recv_data = self.recv_data_with_filter
+        else:
+            self.recv_data = self.recv_data_no_filter
+
+    # Receive and return dsr_header and upper layer data from the interface
+    def recv_data(self):
+        """
+        This method listens for any incoming raw frames from the interface, and outputs the list containing a
+        dsr_header and the upper_raw_data of the frame received
+        """
+        pass
+
     def send_raw_frame(self, dst_mac, dsr_header, payload):
         eth_header = self.gen_eth_header(self.node_mac, dst_mac)
 
@@ -284,8 +299,9 @@ class RawTransport:
     def int2ip(self, addr):
         return socket.inet_ntoa(struct.pack("!I", addr))
 
-    # Receive and return dsr_header and upper layer data from the interface
-    def recv_data(self):
+    # Receive and return dsr_header and upper layer data from the interface, filter out the mac addresses,
+    # which are not in the self.topology_neighbors list
+    def recv_data_with_filter(self):
         while self.running:
             # Receive raw frame from the interface
             data = self.recv_socket.recv(65535)
@@ -295,8 +311,7 @@ class RawTransport:
             src_mac = self.get_src_mac(data[:14])
 
             # Check if the mac in the list of topology_neighbors. If not - just drop it.
-            # If SET_TOPOLOGY_FLAG is False, then do not filter any frames (the if statement below is always True)
-            if (src_mac in self.topology_neighbors) >= SET_TOPOLOGY_FLAG:
+            if src_mac in self.topology_neighbors:
                 # Get and return dsr_header object and upper layer raw data
                 # Create dsr_header object
                 TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
@@ -314,6 +329,30 @@ class RawTransport:
             else:
                 # print "!!! THIS MAC HAS BEEN FILTERED !!! %s" % src_mac
                 pass
+
+    # Receive and return dsr_header and upper layer data from the interface from ANY mac address without filtering
+    def recv_data_no_filter(self):
+        while self.running:
+            # Receive raw frame from the interface
+            data = self.recv_socket.recv(65535)
+
+            # Get a src_mac address from the frame
+            src_mac = self.get_src_mac(data[:14])
+
+            if src_mac == self.node_mac:
+                TRANSPORT_LOG.debug("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
+
+            # Else, return the data
+            else:
+                # Get and return dsr_header object and upper layer raw data
+                # Create dsr_header object
+                TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
+                dsr_header_obj = self.create_dsr_object(data)
+
+                # Get upper raw data
+                upper_raw_data = data[(14 + dsr_header_obj.length):]
+
+                return dsr_header_obj, upper_raw_data
 
     def create_dsr_object(self, data):
         # header_format = Messages.DsrHeader.header_format
