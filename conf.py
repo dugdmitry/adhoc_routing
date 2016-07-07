@@ -4,4 +4,3 @@ UDS_ADDRESS = "/tmp/uds_socket"
 ABSOLUTE_PATH = "/root/SmartLighting/AdhocRouting/"
 LOG_LEVEL = "INFO"
 SET_TOPOLOGY_FLAG = True
-MONITORING_MODE_FLAG = False

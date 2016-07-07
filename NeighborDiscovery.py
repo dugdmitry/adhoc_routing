@@ -182,3 +182,4 @@ class NeighborDiscovery:
         self.advertise_thread._Thread__stop()
 
         NEIGHBOR_LOG.info("NeighborDiscovery threads are stopped")
+
