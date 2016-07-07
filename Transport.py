@@ -17,7 +17,7 @@ from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
 
 
 TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
-
+TRANSPORT_LOG.info("INITIALIZING TRANSPORT...")
 
 # Syscall ids for managing network interfaces via ioctl
 TUNSETIFF = 0x400454ca
@@ -95,7 +95,6 @@ class UdsServer(threading.Thread):
         
     def quit(self):
         self.running = False
-        self._Thread__stop()
         # Removing the uds socket
         os.system("rm %s" % self.server_address)
 
