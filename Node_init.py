@@ -327,7 +327,6 @@ if __name__ == "__main__":
         opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "set_ipv4=", "set_ipv6="])
     except getopt.GetoptError:
         ROUTING_LOG.info("Valid options: --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address>")
-        print "Valid options: --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address>"
 
         sys.exit(2)
     if len(args) <= 1:
@@ -341,14 +340,12 @@ if __name__ == "__main__":
                 daemon.restart()
             else:
                 ROUTING_LOG.info("Unknown command.")
-                print "Unknown command."
 
         # If an option is set, assign the given ip address to the app_trasport
         else:
             for opt, arg in opts:
                 if opt in ("-h", "--help"):
                     ROUTING_LOG.info("Usage: %s --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address> [start|stop|restart]", sys.argv[0])
-                    print "Usage: %s --set_ipv4 <ipv4_address> --set_ipv6 <ipv6_address> [start|stop|restart]" % sys.argv[0]
 
                     sys.exit()
                 elif opt in ("--set_ipv4"):
@@ -360,7 +357,6 @@ if __name__ == "__main__":
                         uds_client.send("ipv4-" + ipv4_address)                     # "-" is a delimeter
                     else:
                         ROUTING_LOG.info("The daemon is not running!")
-                        print "The daemon is not running!"
 
                 elif opt in ("--set_ipv6"):
                     ipv6_address = arg
@@ -371,8 +367,9 @@ if __name__ == "__main__":
                         uds_client.send("ipv6-" + ipv6_address)                     # "-" is a delimeter
                     else:
                         ROUTING_LOG.info("The daemon is not running!")
-                        print "The daemon is not running!"
 
     else:
         ROUTING_LOG.info("Usage: %s [options] start|stop|restart", sys.argv[0])
-        print "Usage: %s [options] start|stop|restart" % sys.argv[0]
+
+
+

@@ -163,10 +163,6 @@ class AdvertiseNeighbor(threading.Thread):
 
 class NeighborDiscovery:
     def __init__(self, node_mac, app_transport_obj, raw_transport_obj, table_obj, hello_msg_queue):
-        # Create initial empty neighbors file
-        f = open("neighbors_file", "w")
-        f.close()
-        # Create listening and advertising threads
         self.listen_thread = ListenNeighbors(node_mac, table_obj, hello_msg_queue)
         self.advertise_thread = AdvertiseNeighbor(node_mac, app_transport_obj, raw_transport_obj)
         
