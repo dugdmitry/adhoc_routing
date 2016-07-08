@@ -172,8 +172,8 @@ class Daemon:
 class RoutingDaemon(Daemon):
 
     def run(self):
-        # Start all logging threads
-        routing_logging.start_all_log_threads()
+        # Initialize and start the log thread
+        routing_logging.init_log_thread()
 
         ROUTING_LOG.info("Running the routing instance...")
 
@@ -217,8 +217,8 @@ class RoutingDaemon(Daemon):
             neighbor_routine.stop_threads()
             # Stop UDS server
             uds_server.quit()
-            # Stop all logging threads
-            routing_logging.stop_all_log_threads()
+            # Stop the log thread
+            routing_logging.stop_log_thread()
 
         return 0
 
