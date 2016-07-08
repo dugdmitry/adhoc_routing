@@ -36,9 +36,11 @@ class LoggingHandler(threading.Thread):
     def __init__(self):
         super(LoggingHandler, self).__init__()
         self.running = True
+        self.root_logger = logging.getLogger()
 
     # Get the log message and its arguments from the queue, write them to the log instance
     def run(self):
+        self.root_logger.info("STARTING THE LOG THREAD...")
         while self.running:
             # loglevel, msg, args, kwargs = self.logging_queue.get()
             log_object_method, msg, args, kwargs = LOG_QUEUE.get()
@@ -47,9 +49,7 @@ class LoggingHandler(threading.Thread):
 
     def quit(self):
         self.running = False
-        log_wrapper_obj = LogWrapper(logging.getLogger())
-        log_wrapper_obj.info("STOPPING THE LOG THREAD...")
-        LOG_QUEUE.put(log_wrapper_obj)
+        self.root_logger.info("STOPPING THE LOG THREAD...")
 
 
 # Handles the log methods (info, debug, error, etc.) called from the modules, and forwards
