@@ -61,24 +61,19 @@ class LogWrapper:
 
     # Define callbacks which will be used by other modules to send their logging messages to
     def info(self, msg, *args, **kwargs):
-        log_method = self.logger_object.info
-        LOG_QUEUE.put((log_method, msg, args, kwargs))
+        LOG_QUEUE.put((self.logger_object.info, msg, args, kwargs))
 
     def debug(self, msg, *args, **kwargs):
-        log_method = self.logger_object.debug
-        LOG_QUEUE.put((log_method, msg, args, kwargs))
+        LOG_QUEUE.put((self.logger_object.debug, msg, args, kwargs))
 
     def error(self, msg, *args, **kwargs):
-        log_method = self.logger_object.error
-        LOG_QUEUE.put((log_method, msg, args, kwargs))
+        LOG_QUEUE.put((self.logger_object.error, msg, args, kwargs))
 
     def warning(self, msg, *args, **kwargs):
-        log_method = self.logger_object.warning
-        LOG_QUEUE.put((log_method, msg, args, kwargs))
+        LOG_QUEUE.put((self.logger_object.warning, msg, args, kwargs))
 
     def critical(self, msg, *args, **kwargs):
-        log_method = self.logger_object.critical
-        LOG_QUEUE.put((log_method, msg, args, kwargs))
+        LOG_QUEUE.put((self.logger_object.critical, msg, args, kwargs))
 
 
 # Create and output a logger wrap object which will be sending the logging messages to a single log thread
