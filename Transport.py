@@ -7,6 +7,7 @@ Created on Oct 8, 2014
 
 import socket
 import threading
+import subprocess
 import os
 from fcntl import ioctl
 import struct
@@ -51,9 +52,11 @@ class UdsServer(threading.Thread):
         super(UdsServer, self).__init__()
         self.running = True
         self.server_address = server_address
-        # Check whether the previous uds_socket still exists on this address or not. If yes, then delete it
-        if os.path.isfile(self.server_address):
-            os.system("rm %s" % self.server_address)
+        # Create file descriptor for forwarding all the output to /dev/null from subprocess calls
+        self.FNULL = open(os.devnull, "w")
+        # Delete the previous uds_socket if it still exists on this address.
+        subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)
+        TRANSPORT_LOG.info("Deleted: %s", self.server_address)
 
         # Create a UDS socket
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
@@ -97,7 +100,7 @@ class UdsServer(threading.Thread):
         self.running = False
         self._Thread__stop()
         # Removing the uds socket
-        os.system("rm %s" % self.server_address)
+        subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)
 
 
 # Class for virtual interface
@@ -105,7 +108,6 @@ class VirtualTransport:
     def __init__(self):
         tun_mode = IFF_TUN
         f = os.open("/dev/net/tun", os.O_RDWR)
-        # ifs = ioctl(f, TUNSETIFF, struct.pack("16sH", "tun0", tun_mode))
         ioctl(f, TUNSETIFF, struct.pack("16sH", VIRT_IFACE_NAME, tun_mode))
 
         self.setMtu(VIRT_IFACE_NAME, 1400)      # !!! MTU value is fixed for now. !!!
