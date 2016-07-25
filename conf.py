@@ -3,5 +3,5 @@ VIRT_IFACE_NAME = "dsr0"
 UDS_ADDRESS = "/tmp/uds_socket"
 ABSOLUTE_PATH = "/home/fila/AdhocRouting/"
 LOG_LEVEL = "INFO"
-SET_TOPOLOGY_FLAG = True
+SET_TOPOLOGY_FLAG = False
 MONITORING_MODE_FLAG = False
