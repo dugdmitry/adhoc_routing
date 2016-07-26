@@ -65,6 +65,7 @@ class ProcessNeighbors:
             for addr in self.neighbors_list[mac].l3_addresses:
                 if addr:
                     f.write(addr)
+                    f.write("\n")
             f.write("\n")
         f.close()
 
