@@ -6,10 +6,13 @@ Created on Sep 30, 2014
 """
 
 from time import time
+import threading
 
 import routing_logging
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
+
+lock = threading.Lock()
 
 
 class Entry:
@@ -183,7 +186,9 @@ class Table:
             if self.entries[dst_mac] == []:
                 del self.entries[dst_mac]
 
+            lock.acquire()
             self.print_table()
+            lock.release()
 
         else:
             TABLE_LOG.warning("This should never happen: RouteTable.check_expiry(dst_mac)")
