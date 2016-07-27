@@ -109,7 +109,12 @@ class Table:
         f = open("table.txt", "w")
         f.write("-" * 90 + "\n")
 
-        for dst_mac in self.entries:
+        # Store current entries list in local variable in order to avoid modification
+        # from another threads
+        current_entries = list()
+        current_entries[:] = self.entries
+
+        for dst_mac in current_entries:
             f.write("Towards destination MAC: %s \n" % dst_mac)
             f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>\n")
             for entry in self.entries[dst_mac]:
@@ -186,9 +191,7 @@ class Table:
             if self.entries[dst_mac] == []:
                 del self.entries[dst_mac]
 
-            lock.acquire()
             self.print_table()
-            lock.release()
 
         else:
             TABLE_LOG.warning("This should never happen: RouteTable.check_expiry(dst_mac)")
