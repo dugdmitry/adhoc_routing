@@ -2,7 +2,7 @@
 """
 Created on Feb 23, 2015
 
-@author: dmitry
+@author: Dmitrii
 """
 
 import Messages
@@ -31,7 +31,7 @@ class ProcessNeighbors:
 
         self.node_mac = node_mac
         
-        self.expiry_interval = 60
+        self.expiry_interval = 7
 
         self.last_expiry_check = time.time()
         
@@ -138,7 +138,7 @@ class AdvertiseNeighbor(threading.Thread):
         self.dsr_header.tx_mac = node_mac
         
         self.running = True
-        self.broadcast_interval = 3
+        self.broadcast_interval = 2
 
         self.app_transport = app_transport_obj
         self.raw_transport = raw_transport_obj

@@ -18,7 +18,7 @@ class Entry:
         self.next_hop_mac = next_hop_mac                        # Next hop mac address
         self.n_hops = n_hops                                    # Number of hops to destination
         self.last_activity = time()                             # Timestamp of the last activity
-        self.timeout = 120                                      # Timeout in seconds upon deleting an entry
+        self.timeout = 10                                      # Timeout in seconds upon deleting an entry
 
     def __eq__(self, other):
         return (self.dst_mac == other.dst_mac and
