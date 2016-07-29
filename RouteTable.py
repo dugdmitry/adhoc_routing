@@ -117,7 +117,7 @@ class Table:
         for dst_mac in current_entries:
             f.write("Towards destination MAC: %s \n" % dst_mac)
             f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>\n")
-            for entry in self.entries[dst_mac]:
+            for entry in current_entries[dst_mac]:
                 string = "%s \t %s \t\t\t %s \t %s\n"
                 values = (entry.dst_mac, entry.next_hop_mac, entry.n_hops,
                           str(round((time() - entry.last_activity), 2)))
