@@ -111,8 +111,7 @@ class Table:
 
         # Store current entries list in local variable in order to avoid modification
         # from another threads
-        current_entries = list()
-        current_entries[:] = self.entries
+        current_entries = self.entries.copy()
 
         for dst_mac in current_entries:
             f.write("Towards destination MAC: %s \n" % dst_mac)
