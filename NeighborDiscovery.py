@@ -58,7 +58,7 @@ class AdvertiseNeighbor(threading.Thread):
         self.message = Messages.HelloMessage()
         self.message.mac = node_mac
         self.broadcast_mac = raw_transport_obj.broadcast_mac
-        self.dsr_header = Messages.DsrHeader(1)  # Type 1 corresponds to the HELLO message
+        self.dsr_header = Messages.DsrHeader(1)                 # Type 1 corresponds to the HELLO message
         self.dsr_header.src_mac = node_mac
         self.dsr_header.tx_mac = node_mac
 
@@ -87,17 +87,18 @@ class AdvertiseNeighbor(threading.Thread):
         self.running = False
 
 
-# A thread for listening to incoming Hello messages and registering the corresponding neighbors
+# A thread for listening to incoming Hello messages and registering the corresponding neighbors.
+# It handles the cases when the neighbors are disappeared, or some new nodes have appeared.
 class ListenNeighbors(threading.Thread):
     def __init__(self, node_mac, table_obj, hello_msg_queue):
         super(ListenNeighbors, self).__init__()
         self.running = True
-        # self.neighbors = ProcessNeighbors(node_mac, table_obj)
         self.node_mac = node_mac
-        self.table = table_obj
+        # self.table = table_obj
         self.hello_msg_queue = hello_msg_queue
 
-        self.neighbors_list = {}  # List of current neighbors in a form {ip, neighbor_object}
+        # Internal list of current neighbors in a form {mac: neighbor_object}
+        self.neighbors_list = table_obj.neighbors_list
         self.expiry_interval = 7
         self.last_expiry_check = time.time()
 
@@ -119,7 +120,7 @@ class ListenNeighbors(threading.Thread):
             neighbor.mac = data.mac
             self.neighbors_list[data.mac] = neighbor
             # Adding an entry to the Route Table
-            self.add_neighbor_entry(data)
+            self.add_neighbor_entry(neighbor)
         else:
             self.neighbors_list[data.mac].l3_addresses = data.l3_addresses
             self.neighbors_list[data.mac].last_activity = time.time()
@@ -141,39 +142,37 @@ class ListenNeighbors(threading.Thread):
             f.write("\n")
         f.close()
 
+    # Check all the neighbors for the expired timeout. Delete all the expired neighbors.
     def check_expired_neighbors(self):
-        keys_to_delete = []
+        macs_to_delete = []
         for n in self.neighbors_list:
             if (time.time() - self.neighbors_list[n].last_activity) > self.expiry_interval:
-                keys_to_delete.append(n)
+                macs_to_delete.append(n)
         # Deleting from the neighbors' list
-        for k in keys_to_delete:
+        for mac in macs_to_delete:
 
             NEIGHBOR_LOG.info("Neighbor has gone offline. Removing: %s", str(k))
 
-            # Deleting from the Route Table
-            self.del_neighbor_entry(self.neighbors_list[k].mac)
             # Deleting this key from the dictionary
-            del self.neighbors_list[k]
+            self.del_neighbor_entry(mac)
 
-    # Add the neighbor entry to the route table
-    def add_neighbor_entry(self, data):
-        # Add an entry in the route table in a form (dest_mac, next_hop_mac, n_hops)
-        NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(data.mac))
+    # Add the neighbor entry to the shared dictionary
+    def add_neighbor_entry(self, neighbor):
+        NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(neighbor.mac))
 
         lock.acquire()
-        self.table.add_entry(data.mac, data.mac, 1)
+        # self.table.add_entry(data.mac, data.mac, 1)
+        self.neighbors_list.update({neighbor.mac: neighbor})
         lock.release()
 
         return True
 
-    # Delete the neighbor entry from the route table
+    # Delete the neighbor entry from the shared dictionary
     def del_neighbor_entry(self, mac):
-        # Delete an entry from the route table in a form (dest_mac, next_hop_mac, n_hops)
-        NEIGHBOR_LOG.info("Deleting the neighbor: %s", str(mac))
+        NEIGHBOR_LOG.debug("Deleting the neighbor: %s", str(mac))
 
         lock.acquire()
-        self.table.del_entries(mac)
+        del self.neighbors_list[mac]
         lock.release()
 
         return True

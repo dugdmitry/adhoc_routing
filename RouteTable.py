@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-Created on Sep 30, 2014
+Created on Aug 1, 2016
 
 @author: Dmitrii Dugaev
 """
@@ -35,8 +35,14 @@ class Entry:
         return out_string
 
 
+# A class of route table. Contains methods for manipulating the entries and its values, which correspond to
+# different src-dst pairs (routes).
 class Table:
     def __init__(self, node_mac):
+        # Define a shared list of current active neighbors. This list is also used by the ListenNeighbors class
+        # from the NeighborDiscovery module. Format: {mac: neighbor_object}
+        self.neighbors_list = dict()
+
         self.entries = {}             # List of entries
         self.arp_table = {}           # A dictionary which maps current IP addresses with the devices' MAC addresses
         self.node_mac = node_mac
