@@ -92,11 +92,11 @@ class Daemon:
         os.dup2(se.fileno(), sys.stderr.fileno())
 
         # write pidfile
-        atexit.register(self.delpid)
+        atexit.register(self.del_pid)
         pid = str(os.getpid())
         file(self.pidfile, 'w+').write("%s\n" % pid)
 
-    def delpid(self):
+    def del_pid(self):
         os.remove(self.pidfile)
 
     def start(self):
