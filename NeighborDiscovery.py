@@ -151,7 +151,7 @@ class ListenNeighbors(threading.Thread):
         # Deleting from the neighbors' list
         for mac in macs_to_delete:
 
-            NEIGHBOR_LOG.info("Neighbor has gone offline. Removing: %s", str(k))
+            NEIGHBOR_LOG.info("Neighbor has gone offline. Removing: %s", str(mac))
 
             # Deleting this key from the dictionary
             self.del_neighbor_entry(mac)

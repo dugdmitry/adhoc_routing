@@ -32,14 +32,30 @@ c = Resource()
 a = Resource()
 b = Resource()
 
-print "qwerty: %s" % str(a)
+# print "qwerty: %s" % str(a)
+#
+# print a.id
+# print b.id
+# print c.id
+# print c.id_counter
+#
+# log = FooLogger()
+# log.create_logger()
+# log.create_logger()
+#
 
-print a.id
-print b.id
-print c.id
-print c.id_counter
 
-log = FooLogger()
-log.create_logger()
-log.create_logger()
+# Test dict inheritance
+class Entry(dict):
+    def __init__(self, src_ip, dst_ip, neighbors_list):
+        super(Entry, self).__init__()
 
+        self.src_ip = src_ip
+        self.dst_ip = dst_ip
+        self.neighbors_list = neighbors_list
+
+        self[src_ip + dst_ip] = neighbors_list
+
+ent = Entry("src", "dst", [1, 2, 3, 4, 5])
+
+print ent["srcdst"]
