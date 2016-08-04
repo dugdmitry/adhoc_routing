@@ -254,6 +254,14 @@ class Table:
             TABLE_LOG.warning("CANNOT GET AVERAGE VALUE! NO SUCH ENTRY!!! Returning 0")
             return 0.0
 
+    # Return the current list of neighbors
+    def get_neighbors(self):
+        neighbors_list = list(set(self.neighbors_list))
+
+        TABLE_LOG.debug("Got list of neighbors: %s", neighbors_list)
+
+        return neighbors_list
+
     # # Add an entry to the route table and the arp_table
     # def add_entry(self, dst_mac, next_hop_mac, n_hops):
     #     # Create new route entry object

@@ -541,22 +541,25 @@ class ServiceMessagesHandler(threading.Thread):
 
         self.rreq_ids.append(rreq.id)
 
-        # Adding entries in route table:
-        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
-        lock.acquire()
-        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
-        lock.release()
-        # Update arp_table
-        lock.acquire()
-        self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
-        lock.release()
-        
+        # # Adding entries in route table:
+        # # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        # lock.acquire()
+        # self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
+        # lock.release()
+        # # Update arp_table
+        # lock.acquire()
+        # self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
+        # lock.release()
+
+        # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
+        self.table.update_entry(rreq.src_ip, dsr_header.tx_mac, 100.0 / rreq.hop_count)
+
         # Get a list of currently assigned ip addresses to the node
         node_ips = self.app_transport.get_L3_addresses_from_interface()
         
         if rreq.dst_ip in node_ips:
 
-            DATA_LOG.info("Processing the RREQ, generating and sending back the RREP")
+            DATA_LOG.info("Processing the RREQ, generating and sending back the RREP broadcast")
 
             # Generate and send RREP back to the source
             rrep = Messages.RouteReply()
@@ -569,9 +572,8 @@ class ServiceMessagesHandler(threading.Thread):
             new_dsr_header = self.gen_dsr_header(dsr_header, 3)         # Type 3 corresponds to RREP service message
 
             # Send the RREP reliably using arq_handler
-            self.arq_handler.arq_send(rrep, new_dsr_header, [dsr_header.tx_mac])
-
-            # self.raw_transport.send_raw_frame(dsr_header.tx_mac, new_dsr_header, pickle.dumps(rrep))
+            # self.arq_handler.arq_send(rrep, new_dsr_header, [dsr_header.tx_mac])
+            self.arq_handler.arq_send(rrep, new_dsr_header, self.table.get_neighbors())
 
             DATA_LOG.debug("Generated RREP: %s", str(rrep))
             DATA_LOG.debug("RREQ.dst_ip: %s", str(rreq.dst_ip))
@@ -609,15 +611,18 @@ class ServiceMessagesHandler(threading.Thread):
 
         self.rreq_ids.append(rreq.id)
 
-        # Adding entries in route table:
-        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
-        lock.acquire()
-        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
-        lock.release()
-        # Update arp_table
-        lock.acquire()
-        self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
-        lock.release()
+        # # Adding entries in route table:
+        # # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        # lock.acquire()
+        # self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rreq.hop_count)
+        # lock.release()
+        # # Update arp_table
+        # lock.acquire()
+        # self.table.update_arp_table(rreq.src_ip, dsr_header.src_mac)
+        # lock.release()
+
+        # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
+        self.table.update_entry(rreq.src_ip, dsr_header.tx_mac, 100.0 / rreq.hop_count)
 
         # Get a list of currently assigned ip addresses to the node
         node_ips = self.app_transport.get_L3_addresses_from_interface()
@@ -637,9 +642,8 @@ class ServiceMessagesHandler(threading.Thread):
             new_dsr_header = self.gen_dsr_header(dsr_header, 3)         # Type 3 corresponds to RREP service message
 
             # Send the RREP reliably using arq_handler
-            self.arq_handler.arq_send(rrep, new_dsr_header, [dsr_header.tx_mac])
-
-            # self.raw_transport.send_raw_frame(dsr_header.tx_mac, new_dsr_header, pickle.dumps(rrep))
+            # self.arq_handler.arq_send(rrep, new_dsr_header, [dsr_header.tx_mac])
+            self.arq_handler.arq_send(rrep, new_dsr_header, self.table.get_neighbors())
 
             DATA_LOG.debug("Generated RREP: %s", str(rrep))
             DATA_LOG.debug("RREQ.dst_ip: %s", str(rreq.dst_ip))
@@ -663,48 +667,78 @@ class ServiceMessagesHandler(threading.Thread):
 
         self.rrep_ids.append(rrep.id)
 
-        # Adding entries in route table:
-        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
-        # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
-        lock.acquire()
-        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
-        lock.release()
-        # Update arp_table
-        lock.acquire()
-        self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
-        self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
-        lock.release()
-        
-        if dsr_header.dst_mac != self.node_mac:
-            # Forward RREP further
-            DATA_LOG.info("Forwarding RREP further. RREP_ID: %s", str(rrep.id))
+        # # Adding entries in route table:
+        # # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        # # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        # lock.acquire()
+        # self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
+        # lock.release()
+        # # Update arp_table
+        # lock.acquire()
+        # self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
+        # self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
+        # lock.release()
 
-            # Find the entry in route table, corresponding to a given RREQ(RREP) id
-            lock.acquire()
-            entry = self.table.lookup_entry(dsr_header.dst_mac)
-            lock.release()
-            
-            # If no entry is found. Just do nothing.
-            if entry is None:
+        # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
+        self.table.update_entry(rrep.src_ip, dsr_header.tx_mac, 100.0 / rrep.hop_count)
 
-                DATA_LOG.info("No further route for this RREP. Removing. RREP_ID: %s", str(rrep.id))
+        # Get a list of currently assigned ip addresses to the node
+        node_ips = self.app_transport.get_L3_addresses_from_interface()
 
-            else:
-                # Forward the RREP to the next hop derived from the route table
-                rrep.hop_count += 1
-
-                # Prepare a dsr_header
-                dsr_header.tx_mac = self.node_mac
-
-                # Forward the RREP reliably using arq_handler
-                self.arq_handler.arq_send(rrep, dsr_header, [entry.next_hop_mac])
-
-        else:
+        if rrep.dst_ip in node_ips:
 
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
 
             # Put RREP in rrep_queue
             self.rrep_queue.put(rrep.src_ip)
+
+        else:
+
+            DATA_LOG.info("Broadcasting RREP further")
+
+            # Change next_hop value to NODE_IP and broadcast the message further
+            rrep.hop_count += 1
+
+            # Send the RREP reliably using arq_handler to the list of current neighbors except the one who sent it
+            dst_mac_list = self.table.get_neighbors()
+            if dsr_header.tx_mac in dst_mac_list:
+                dst_mac_list.remove(dsr_header.tx_mac)
+
+            # Prepare a dsr_header
+            dsr_header.tx_mac = self.node_mac
+
+            self.arq_handler.arq_send(rrep, dsr_header, dst_mac_list)
+
+        # if dsr_header.dst_mac != self.node_mac:
+        #     # Forward RREP further
+        #     DATA_LOG.info("Forwarding RREP further. RREP_ID: %s", str(rrep.id))
+        #
+        #     # Find the entry in route table, corresponding to a given RREQ(RREP) id
+        #     lock.acquire()
+        #     entry = self.table.lookup_entry(dsr_header.dst_mac)
+        #     lock.release()
+        #
+        #     # If no entry is found. Just do nothing.
+        #     if entry is None:
+        #
+        #         DATA_LOG.info("No further route for this RREP. Removing. RREP_ID: %s", str(rrep.id))
+        #
+        #     else:
+        #         # Forward the RREP to the next hop derived from the route table
+        #         rrep.hop_count += 1
+        #
+        #         # Prepare a dsr_header
+        #         dsr_header.tx_mac = self.node_mac
+        #
+        #         # Forward the RREP reliably using arq_handler
+        #         self.arq_handler.arq_send(rrep, dsr_header, [entry.next_hop_mac])
+        #
+        # else:
+        #
+        #     DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
+        #
+        #     # Put RREP in rrep_queue
+        #     self.rrep_queue.put(rrep.src_ip)
 
     # Handle incoming RREPs while in Monitoring Mode.
     # Receive the RREPs, which have been sent to this node, discard all other RREPs.
@@ -722,19 +756,25 @@ class ServiceMessagesHandler(threading.Thread):
 
         self.rrep_ids.append(rrep.id)
 
-        # Adding entries in route table:
-        # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
-        # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
-        lock.acquire()
-        self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
-        lock.release()
-        # Update arp_table
-        lock.acquire()
-        self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
-        self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
-        lock.release()
+        # # Adding entries in route table:
+        # # Add an entry in the route table in a form (dst_mac, next_hop_mac, n_hops)
+        # # entry = self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, RREP.hop_count)
+        # lock.acquire()
+        # self.table.add_entry(dsr_header.src_mac, dsr_header.tx_mac, rrep.hop_count)
+        # lock.release()
+        # # Update arp_table
+        # lock.acquire()
+        # self.table.update_arp_table(rrep.src_ip, dsr_header.src_mac)
+        # self.table.update_arp_table(rrep.dst_ip, dsr_header.dst_mac)
+        # lock.release()
 
-        if dsr_header.dst_mac == self.node_mac:
+        # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
+        self.table.update_entry(rrep.src_ip, dsr_header.tx_mac, 100.0 / rrep.hop_count)
+
+        # Get a list of currently assigned ip addresses to the node
+        node_ips = self.app_transport.get_L3_addresses_from_interface()
+
+        if rrep.dst_ip in node_ips:
 
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
 
@@ -744,6 +784,17 @@ class ServiceMessagesHandler(threading.Thread):
         # Otherwise, discard the RREP
         else:
             DATA_LOG.info("This RREP is not for me. Discarding RREP, since in Monitoring Mode.")
+
+        # if dsr_header.dst_mac == self.node_mac:
+        #
+        #     DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
+        #
+        #     # Put RREP in rrep_queue
+        #     self.rrep_queue.put(rrep.src_ip)
+        #
+        # # Otherwise, discard the RREP
+        # else:
+        #     DATA_LOG.info("This RREP is not for me. Discarding RREP, since in Monitoring Mode.")
 
     # Handling incoming ack messages
     def ack_handler(self, ack):
