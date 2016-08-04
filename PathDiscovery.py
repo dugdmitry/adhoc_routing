@@ -85,8 +85,8 @@ class RreqRoutine(threading.Thread):
         self.node_mac = table.node_mac
 
         self.dsr_header = Messages.DsrHeader(2)       # Type 2 corresponds to RREQ service message
-        self.max_retries = 3
-        self.interval = 5
+        self.max_retries = 1
+        self.interval = 10
 
     def run(self):
         count = 0

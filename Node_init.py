@@ -185,7 +185,7 @@ class RoutingDaemon(Daemon):
         topology_neighbors = self.get_topology_neighbors(node_mac)
         raw_transport = Transport.RawTransport(DEV, node_mac, topology_neighbors)
         # Create a RouteTable object
-        table = RouteTable.Table(node_mac)
+        table = RouteTable.Table()
         # Create a queue for in coming app data
         app_queue = Queue.Queue()
         # Creating a queue for handling HELLO messages from the NeighborDiscovery

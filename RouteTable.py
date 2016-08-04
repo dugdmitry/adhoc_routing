@@ -129,9 +129,9 @@ class ActionSelector:
 
 # Class Entry represents a dictionary containing current estimated values for forwarding a packet to the given mac.
 class Entry(dict):
-    def __init__(self, src_ip, dst_ip, neighbors_list):
+    def __init__(self, dst_ip, neighbors_list):
         super(Entry, self).__init__()
-        self.src_ip = src_ip
+        # self.src_ip = src_ip
         self.dst_ip = dst_ip
         # Store a copy of the initial neighbors_list
         self.local_neighbor_list = copy.deepcopy(neighbors_list)
@@ -208,7 +208,7 @@ class Table:
         # ListenNeighbors class from the NeighborDiscovery module. Format: {mac: neighbor_object}
         self.neighbors_list = dict()
 
-        # Define list of current route entries. Format: {hash(src_ip + dst_ip): Entry}
+        # Define list of current route entries. Format: {dst_ip: Entry}
         self.entries_list = dict()
 
         # Create RL helper object, to handle the calculation of values and select the actions
@@ -219,34 +219,36 @@ class Table:
         # self.entries = {}             # List of entries
         # self.arp_table = {}           # A dictionary which maps current IP addresses with the devices' MAC addresses
 
-    # This method selects a next hop for the packet with the given src_ip - dst_ip pair.
+    # This method selects a next hop for the packet with the given dst_ip.
     # The selection is being made from the current estimated values of the neighbors mac addresses,
     # using some of the available action selection algorithms - such as greedy, e-greedy, soft-max and so on.
-    def get_next_hop_mac(self, src_ip, dst_ip):
-        hash_key = hash(src_ip + dst_ip)
-        if hash_key in self.entries_list:
+    def get_next_hop_mac(self, dst_ip):
+        if dst_ip in self.entries_list:
             # Update the neighbors and corresponding action values
-            self.entries_list[hash_key].update_neighbors(self.neighbors_list)
-        # Add the entry if it is not already in the list
+            self.entries_list[dst_ip].update_neighbors(self.neighbors_list)
+            # Select a next hop mac
+            next_hop_mac = self.action_selector.select_action(self.entries_list[dst_ip])
+            return next_hop_mac
+        # If no such entry, return None
         else:
-            self.entries_list.update({hash_key: Entry(src_ip, dst_ip, self.neighbors_list)})
-        # Select a next hop mac
-        next_hop_mac = self.action_selector.select_action(self.entries_list[hash_key])
-        return next_hop_mac
+            # self.entries_list.update({dst_ip: Entry(dst_ip, self.neighbors_list)})
+            return None
 
     # Update the estimation value of the given action_id (mac) by the given reward
-    def update_entry(self, src_ip, dst_ip, mac, reward):
-        hash_key = hash(src_ip + dst_ip)
-        if hash_key in self.entries_list:
-            self.entries_list[hash_key].update_value(mac, reward)
+    def update_entry(self, dst_ip, mac, reward):
+        if dst_ip in self.entries_list:
+            self.entries_list[dst_ip].update_value(mac, reward)
         else:
-            TABLE_LOG.error("NO SUCH SRC-DST PAIR TO UPDATE!!!")
+            TABLE_LOG.info("No such Entry to update. Creating and updating a new entry for dst_ip and mac: %s - %s",
+                            dst_ip, mac)
+
+            self.entries_list.update({dst_ip: Entry(dst_ip, self.neighbors_list)})
+            self.entries_list[dst_ip].update_value(mac, reward)
 
     # Calculate and return the average estimated value of the given entry
-    def get_avg_value(self, src_ip, dst_ip):
-        hash_key = hash(src_ip + dst_ip)
-        if hash_key in self.entries_list:
-            return self.entries_list[hash_key].calc_avg_value()
+    def get_avg_value(self, dst_ip):
+        if dst_ip in self.entries_list:
+            return self.entries_list[dst_ip].calc_avg_value()
         # Else, return 0 value with the warning
         else:
             TABLE_LOG.warning("CANNOT GET AVERAGE VALUE! NO SUCH ENTRY!!! Returning 0")

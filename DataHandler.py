@@ -9,6 +9,7 @@ import Messages
 import PathDiscovery
 import ArqHandler
 
+import time
 import Queue
 import pickle
 import threading
@@ -23,8 +24,63 @@ lock = threading.Lock()
 DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler")
 
 
+# Wrapping class for starting app_handler and incoming_data_handler threads
+class DataHandler:
+    def __init__(self, app_transport, app_queue, hello_msg_queue, raw_transport, table):
+        # Create an arq handler object
+        arq_handler = ArqHandler.ArqHandler(raw_transport)
+
+        # Creating a queue for receiving RREPs
+        rrep_queue = Queue.Queue()
+        # Creating a queue for the delayed packets waiting for rrep message
+        wait_queue = Queue.Queue()
+        # Creating a queue for handling incoming RREQ and RREP packets from the raw_socket
+        service_msg_queue = Queue.Queue()
+        # Creating a deque list for keeping the received broadcast IDs
+        broadcast_list = deque(maxlen=10000)  # Limit the max length of the list
+
+        # Define a structure for handling reward wait threads for given dst_ips.
+        # Format: {hash(dst_ip + next_hop_mac): thread_object}.
+        # A reward value is being forwarded to the thread via a queue_object.
+        reward_wait_list = dict()
+
+        # Creating thread objects
+        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue,
+                                                                        rrep_queue, arq_handler, table)
+
+        self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport,
+                                             table, reward_wait_list, broadcast_list)
+
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue, hello_msg_queue,
+                                                                      app_transport, raw_transport, table,
+                                                                      reward_wait_list, broadcast_list)
+
+        self.service_messages_handler_thread = ServiceMessagesHandler(table, app_transport, raw_transport,
+                                                                      arq_handler, rrep_queue, service_msg_queue)
+
+    # Starting the threads
+    def run(self):
+        self.app_handler_thread.start()
+        self.incoming_traffic_handler_thread.start()
+        self.path_discovery_thread.start()
+        self.service_messages_handler_thread.start()
+
+    def stop_threads(self):
+        self.app_handler_thread.quit()
+        self.incoming_traffic_handler_thread.quit()
+        self.path_discovery_thread.quit()
+        self.service_messages_handler_thread.quit()
+
+        self.app_handler_thread._Thread__stop()
+        self.incoming_traffic_handler_thread._Thread__stop()
+        self.path_discovery_thread._Thread__stop()
+        self.service_messages_handler_thread._Thread__stop()
+
+        DATA_LOG.info("Traffic handlers are stopped")
+
+
 class AppHandler(threading.Thread):
-    def __init__(self, app_queue, wait_queue, raw_transport, table, broadcast_list):
+    def __init__(self, app_queue, wait_queue, raw_transport, table, reward_wait_list, broadcast_list):
         super(AppHandler, self).__init__()
         self.running = True
         self.app_queue = app_queue
@@ -36,18 +92,27 @@ class AppHandler(threading.Thread):
         self.node_mac = table.node_mac
         
         self.broadcast_mac = raw_transport.broadcast_mac
-        
+
+        # # Define a structure for handling reward wait threads for given dst_ips.
+        # # Format: {hash(dst_ip + next_hop_mac): thread_object}.
+        # # A reward value is being forwarded to the thread via a queue_object.
+        # self.reward_wait_list = dict()
+        self.reward_wait_list = reward_wait_list
+
     def run(self):
         while self.running:
             src_ip, dst_ip, raw_data = self.app_queue.get()
 
-            # Lookup for a corresponding dst_mac in the arp table
-            dst_mac = self.table.lookup_mac_address(dst_ip)
-            
-            # Check whether the destination IP exists in the Route Table
-            lock.acquire()
-            entry = self.table.lookup_entry(dst_mac)
-            lock.release()
+            # # Lookup for a corresponding dst_mac in the arp table
+            # dst_mac = self.table.lookup_mac_address(dst_ip)
+
+            # # Check whether the destination IP exists in the Route Table
+            # lock.acquire()
+            # entry = self.table.lookup_entry(dst_mac)
+            # lock.release()
+
+            # Try to find a mac address of the next hop where a packet should be forwarded to
+            next_hop_mac = self.table.get_next_hop_mac(dst_ip)
 
             # Check if the packet's destination address is IPv6 multicast
             # Always starts from "ff0X::",
@@ -104,31 +169,47 @@ class AppHandler(threading.Thread):
 
                 DATA_LOG.debug("Broadcast sent!!!")
 
-            elif entry is None:
+            # If next_hop_mac is None, it means that there is no current entry witch dst_ip.
+            # In that case, start a PathDiscovery procedure
+            elif next_hop_mac is None:
 
-                DATA_LOG.info("No such route in the table. Starting route discovery...")
+                DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
 
                 # ## Start PathDiscovery procedure ## #
                 # Put packet in wait_queue
                 self.wait_queue.put([src_ip, dst_ip, raw_data])
-                
+
+            # Else, the packet is unicast, and has the corresponding Entry.
+            # Forward packet to the next hop. Start a thread wor waiting an ACK with reward.
             else:
 
-                DATA_LOG.debug("Found an entry: %s", str(entry))
+                DATA_LOG.debug("Found a next_hop_mac: %s", next_hop_mac)
 
-                next_hop_mac = entry.next_hop_mac
+                # # next_hop_mac = entry.next_hop_mac
+                # next_hop_mac = self.table.get_next_hop_mac(src_ip, dst_ip)
+
                 # Create a unicast dsr header with proper values
-                dsr_header = self.create_dsr_unicast_header(dst_mac)
+                dsr_header = self.create_dsr_unicast_header()
                 # Send the raw data with dsr_header to the next hop
                 self.transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
 
+                hash_value = hash(dst_ip + next_hop_mac)
+                # Start a thread for receiving a reward value on a given dst_ip
+                if hash_value not in self.reward_wait_list:
+                    reward_wait_thread = RewardWaitThread(dst_ip, next_hop_mac, self.table, self.reward_wait_list)
+                    # lock.acquire()
+                    self.reward_wait_list.update({hash_value: reward_wait_thread})
+                    # lock.release()
+                    # Start the thread
+                    reward_wait_thread.start()
+
         DATA_LOG.debug("LOOP FINISHED!!!")
 
-    def create_dsr_unicast_header(self, dst_mac):
+    def create_dsr_unicast_header(self):
         _type = 0                                       # Type 0 corresponds to the data packets
         dsr_header = Messages.DsrHeader(_type)
         dsr_header.src_mac = self.node_mac
-        dsr_header.dst_mac = dst_mac
+        # dsr_header.dst_mac = dst_mac
         dsr_header.tx_mac = self.node_mac
         return dsr_header
 
@@ -144,58 +225,75 @@ class AppHandler(threading.Thread):
         self.running = False
 
 
-# Wrapping class for starting app_handler and incoming_data_handler threads
-class DataHandler:
-    def __init__(self, app_transport, app_queue, hello_msg_queue, raw_transport, table):
-        # Create an arq handler object
-        arq_handler = ArqHandler.ArqHandler(raw_transport)
+# Thread for waiting for an incoming reward messages on the given dst_ip.
+# It receives a [dst_ip, mac, reward] via the queue, and updates the RouteTable.
+class RewardWaitThread(threading.Thread):
+    def __init__(self, dst_ip, mac, table, reward_wait_list):
+        super(RewardWaitThread, self).__init__()
+        self.dst_ip = dst_ip
+        self.mac = mac
+        self.table = table
+        self.reward_wait_list = reward_wait_list
+        self.reward_wait_queue = Queue.Queue()
+        # Wait timeout after which initiate negative reward on the dst_ip
+        self.wait_timeout = 3
 
-        # Creating a queue for receiving RREPs
-        rrep_queue = Queue.Queue()
-        # Creating a queue for the delayed packets waiting for rrep message
-        wait_queue = Queue.Queue()
-        # Creating a queue for handling incoming RREQ and RREP packets from the raw_socket
-        service_msg_queue = Queue.Queue()
-        # Creating a deque list for keeping the received broadcast IDs
-        broadcast_list = deque(maxlen=10000)  # Limit the max length of the list
-
-        # Creating thread objects
-        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue,
-                                                                        rrep_queue, arq_handler, table)
-        
-        self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport, table, broadcast_list)
-
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue,
-                                                                      hello_msg_queue, app_transport,
-                                                                      raw_transport, table, broadcast_list)
-
-        self.service_messages_handler_thread = ServiceMessagesHandler(table, app_transport, raw_transport,
-                                                                      arq_handler, rrep_queue, service_msg_queue)
-
-    # Starting the threads
     def run(self):
-        self.app_handler_thread.start()
-        self.incoming_traffic_handler_thread.start()
-        self.path_discovery_thread.start()
-        self.service_messages_handler_thread.start()
-        
-    def stop_threads(self):
-        self.app_handler_thread.quit()
-        self.incoming_traffic_handler_thread.quit()
-        self.path_discovery_thread.quit()
-        self.service_messages_handler_thread.quit()
-        
-        self.app_handler_thread._Thread__stop()
-        self.incoming_traffic_handler_thread._Thread__stop()
-        self.path_discovery_thread._Thread__stop()
-        self.service_messages_handler_thread._Thread__stop()
+        try:
+            dst_ip, mac, reward = self.reward_wait_queue.get(timeout=self.wait_timeout)
+            # Update value by received reward
+            self.table.update_entry(dst_ip, mac, reward)
+        # Update with a "bad" reward, if the timeout has been reached
+        except Queue.Empty:
+            self.table.update_entry(self.dst_ip, self.mac, 0)
+        # Finally, delete its own entry from the reward_wait_list
+        finally:
+            # lock.acquire()
+            del self.reward_wait_list[hash(self.dst_ip + self.mac)]
+            # lock.release()
 
-        DATA_LOG.info("Traffic handlers are stopped")
+    def set_reward(self, dst_ip, mac, reward):
+        self.reward_wait_queue.put((dst_ip, mac, reward))
+
+
+# Thread for generating and sending back a reward message upon receiving a packet with a corresponding dst_ip
+# from the network interface.
+class RewardSendThread(threading.Thread):
+    def __init__(self, dst_ip, mac, table, raw_transport, reward_send_list):
+        super(RewardSendThread, self).__init__()
+        self.dst_ip = dst_ip
+        self.mac = mac
+        self.table = table
+        self.raw_transport = raw_transport
+        self.reward_send_list = reward_send_list
+        # Create a reward message object
+        self.reward_message = Messages.RewardMessage()
+        # Create a dsr_header object
+        self.dsr_header = Messages.DsrHeader(6)         # Type 6 corresponds to Reward Message
+        # A time interval the thread waits for, ere generating and sending back the RewardMessage.
+        # This timeout is needed to control a number of generated reward messages for some number of
+        # the received packets with the same dst_ip.
+        self.hold_on_timeout = 2
+
+    def run(self):
+        # Sleep for the hold_on_timeout value
+        time.sleep(self.hold_on_timeout)
+        # Calculate its own average value of the estimated reward towards the given dst_ip
+        avg_value = self.table.get_avg_value()
+        # Assign a reward to the reward message
+        self.reward_message.reward_value = avg_value
+        self.reward_message.dst_ip = self.dst_ip
+        # Send it back to the node which has sent the packet
+        self.raw_transport.send_raw_frame(self.mac, self.dsr_header, pickle.dumps(self.reward_message))
+        # Delete its own entry from the reward_send_list
+        # lock.acquire()
+        self.reward_send_list.remove(hash(self.dst_ip + self.mac))
+        # lock.release()
 
 
 class IncomingTrafficHandler(threading.Thread):
     def __init__(self, app_queue, service_msg_queue, hello_msg_queue,
-                 app_transport, raw_transport, table, broadcast_list):
+                 app_transport, raw_transport, table, reward_wait_list, broadcast_list):
         super(IncomingTrafficHandler, self).__init__()
         # Check the MONITORING_MODE_FLAG.
         # If True - override the self.handle_data_packet method for working in the monitoring mode.
@@ -213,6 +311,14 @@ class IncomingTrafficHandler(threading.Thread):
         self.broadcast_mac = raw_transport.broadcast_mac
         self.max_broadcast_ttl = 1          # Set a maximum number of hops a broadcast frame can be forwarded over
 
+        self.node_mac = raw_transport.node_mac
+
+        # Define a structure for handling reward send threads for given dst_ips.
+        # Format: [hash(dst_ip + mac), ... , hash(dst_ip + mac)].
+        self.reward_send_list = list()
+
+        self.reward_wait_list = reward_wait_list
+
     def run(self):
         while self.running:
 
@@ -229,10 +335,9 @@ class IncomingTrafficHandler(threading.Thread):
                 # Handle HELLO message
                 self.hello_msg_queue.put(raw_data)
 
-            # If the dsr packet contains RREQ or RREQ, or the ACK service messages (types 2, 3 and 5)
-            elif dsr_type == 2 or dsr_type == 3 or dsr_type == 5:
-                # Handle RREQ / RREP / ACK
-
+            # If dsr packet contains some service message: RREQ, RREP, ACK or Reward (types 2, 3, 5 or 6)
+            elif dsr_type == 2 or dsr_type == 3 or dsr_type == 5 or dsr_type == 6:
+                # Handle RREQ / RREP / ACK / Reward
                 DATA_LOG.debug("Got service message. TYPE: %s", dsr_type)
 
                 self.service_msg_queue.put([dsr_header, raw_data])
@@ -250,6 +355,17 @@ class IncomingTrafficHandler(threading.Thread):
     # if the dst_mac equals to the node's mac, send the packet up to the application
     def handle_data_packet(self, dsr_header, raw_data):
         dst_mac = dsr_header.dst_mac
+        # Generate and send back a reward message to the node which has sent this packet
+        mac = dsr_header.tx_mac
+
+        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(raw_data)
+        # Start send thread
+        hash_value = hash(dst_ip + mac)
+        if hash_value not in self.reward_send_list:
+            reward_send_thread = RewardSendThread(dst_ip, mac, self.table, self.raw_transport, self.reward_send_list)
+            self.reward_send_list.append(reward_send_thread)
+            reward_send_thread.start()
+
         # If the dst_mac matches the node's mac, send data to the App
         if dst_mac == self.table.node_mac:
 
@@ -259,25 +375,52 @@ class IncomingTrafficHandler(threading.Thread):
 
         # Else, try to find the next hop in the route table
         else:
-            lock.acquire()
-            entry = self.table.lookup_entry(dst_mac)
-            lock.release()
-            # If no entry is found, put the packet to the initial AppQueue
-            if entry is None:
-                # Get src_ip and dst_ip from the raw_data
-                ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
-                self.app_queue.put([ips[0], ips[1], raw_data])
+            # lock.acquire()
+            # entry = self.table.lookup_entry(dst_mac)
+            # lock.release()
 
-            # Else, forward the packet to the next_hop
+            next_hop_mac = self.table.get_next_hop_mac(dst_ip)
+
+            # If no entry is found, put the packet to the initial AppQueue
+            if next_hop_mac is None:
+                # Get src_ip and dst_ip from the raw_data
+                # ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
+                # self.app_queue.put([ips[0], ips[1], raw_data])
+                # ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
+                self.app_queue.put([src_ip, dst_ip, raw_data])
+
+            # Else, forward the packet to the next_hop. Start a reward wait thread, if necessary.
             else:
-                next_hop_mac = entry.next_hop_mac
+                # next_hop_mac = entry.next_hop_mac
+                dsr_header.tx_mac = self.node_mac
                 # Send the raw data with dsr_header to the next hop
                 self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
+
+                hash_value = hash(dst_ip + next_hop_mac)
+                # Start a thread for receiving a reward value on a given dst_ip
+                if hash_value not in self.reward_wait_list:
+                    reward_wait_thread = RewardWaitThread(dst_ip, next_hop_mac, self.table, self.reward_wait_list)
+                    # lock.acquire()
+                    self.reward_wait_list.update({hash_value: reward_wait_thread})
+                    # lock.release()
+                    # Start the thread
+                    reward_wait_thread.start()
 
     # Handle data packet, if in monitoring mode. If the dst_mac is the mac of the receiving node,
     # send the packet up to the application, otherwise, discard the packet
     def handle_data_packet_monitoring_mode(self, dsr_header, raw_data):
         dst_mac = dsr_header.dst_mac
+        # Generate and send back a reward message to the node which has sent this packet
+        mac = dsr_header.tx_mac
+
+        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(raw_data)
+        # Start send thread
+        hash_value = hash(dst_ip + mac)
+        if hash_value not in self.reward_send_list:
+            reward_send_thread = RewardSendThread(dst_ip, mac, self.table, self.raw_transport, self.reward_send_list)
+            self.reward_send_list.append(reward_send_thread)
+            reward_send_thread.start()
+
         # If the dst_mac matches the node's mac, send data to the App
         if dst_mac == self.table.node_mac:
 
@@ -338,7 +481,7 @@ class ServiceMessagesHandler(threading.Thread):
         self.arq_handler = arq_handler
 
         self.broadcast_mac = raw_transport.broadcast_mac
-        self.node_mac = route_table.node_mac
+        self.node_mac = raw_transport.node_mac
         self.service_msg_queue = service_msg_queue
         self.rrep_queue = rrep_queue  # Store the received RREP in queue for further handling by Path_Discovery thread
         

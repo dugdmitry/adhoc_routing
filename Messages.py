@@ -12,7 +12,7 @@ class RouteRequest:
     dsr_type = 2
 
     def __init__(self):
-        self.id = randint(1, 1000000)
+        self.id = randint(1, 1048575)   # Max value is 2**20 (20 bits)
         self.src_ip = ""
         self.dst_ip = ""
         self.dsn = 0
@@ -44,7 +44,7 @@ class RouteReply:
 
 class HelloMessage:
     def __init__(self):
-        self.id = randint(1, 1000000)
+        self.id = randint(1, 1048575)
         self.mac = ""
         self.l3_addresses = []      # A list of L3 addresses, assigned to this node
         self.retries = 0
@@ -62,6 +62,15 @@ class AckMessage:
         return out_string
 
 
+# Describes a reward message, which is being generated and sent back to the node upon
+# receiving a packet with a given dst_ip.
+class RewardMessage:
+    def __init__(self):
+        self.id = randint(1, 1048575)
+        self.dst_ip = str()
+        self.reward_value = float()
+
+
 class DsrHeader:
     # # Increments every time a broadcast dsr header object is created
     # broadcast_id_counter = 0
@@ -74,7 +83,8 @@ class DsrHeader:
     broadcast_header_format = "BBddii"
 
     def __init__(self, _type=0):
-        # Available types: 0 - Data packet, 1 - HELLO Message, 2,3 - RREQ, RREP, 4 - Broadcast frame, 5 - ACK frame
+        # Available types: 0 - Data packet, 1 - HELLO Message, 2,3 - RREQ, RREP, 4 - Broadcast frame, 5 - ACK frame,
+        #                                   6 - Reward Message
         self.type = _type
         # !!! WARNING !!! #
         # !!! The header_format MUST ALWAYS have the same size for ANY dsr type !!! #
@@ -84,7 +94,7 @@ class DsrHeader:
             self.header_format = DsrHeader.broadcast_header_format
             self.src_mac = "00:00:00:00:00:00"
             self.tx_mac = "00:00:00:00:00:00"
-            self.broadcast_id = randint(1, 1000000)
+            self.broadcast_id = randint(1, 1048575)
             self.broadcast_ttl = 0               # A number of hops the broadcast packets have gone through
             # self.broadcast_id = DsrHeader.broadcast_id_counter
             # DsrHeader.broadcast_id_counter += 1

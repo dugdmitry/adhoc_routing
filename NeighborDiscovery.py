@@ -33,7 +33,7 @@ class NeighborDiscovery:
         f.close()
         # Create listening and advertising threads
         self.listen_thread = ListenNeighbors(node_mac, table_obj, hello_msg_queue)
-        self.advertise_thread = AdvertiseNeighbor(node_mac, app_transport_obj, raw_transport_obj)
+        self.advertise_thread = AdvertiseNeighbor(node_mac, app_transport_obj, raw_transport_obj, table_obj)
 
     def run(self):
         self.listen_thread.start()
@@ -52,7 +52,7 @@ class NeighborDiscovery:
 # A thread which periodically broadcasts Hello messages to the network, so that the neighboring nodes could detect
 # the node's activity and register it as their neighbor
 class AdvertiseNeighbor(threading.Thread):
-    def __init__(self, node_mac, app_transport_obj, raw_transport_obj):
+    def __init__(self, node_mac, app_transport_obj, raw_transport_obj, table_obj):
         super(AdvertiseNeighbor, self).__init__()
 
         self.message = Messages.HelloMessage()
@@ -67,15 +67,30 @@ class AdvertiseNeighbor(threading.Thread):
 
         self.app_transport = app_transport_obj
         self.raw_transport = raw_transport_obj
+        self.table_obj = table_obj
+        self.node_mac = node_mac
+
+        # Store current ip addresses assigned to this node
+        self.current_node_ips = list()
 
     def run(self):
         while self.running:
             self.send_raw_hello()
             time.sleep(self.broadcast_interval)
 
+    # Update node's own ips in the route table
+    def update_ips_in_route_table(self, node_ips):
+        for ip in node_ips:
+            if ip not in self.current_node_ips:
+                self.table_obj.update_entry(ip, self.node_mac, 1000)
+        self.current_node_ips = node_ips
+
     def send_raw_hello(self):
-        # Try to get L3 ip address (ipv4 or ipv6) assigned to the node, if there is such one
+        # Try to get L3 ip address (ipv4 or ipv6) assigned to the node, if there are such ones
         node_ips = self.app_transport.get_L3_addresses_from_interface()
+        # Update entries in RouteTable
+        self.update_ips_in_route_table(node_ips)
+
         self.message.l3_addresses = node_ips
 
         NEIGHBOR_LOG.debug("Sending raw HELLO message")
@@ -94,7 +109,7 @@ class ListenNeighbors(threading.Thread):
         super(ListenNeighbors, self).__init__()
         self.running = True
         self.node_mac = node_mac
-        # self.table = table_obj
+        self.table = table_obj
         self.hello_msg_queue = hello_msg_queue
 
         # Internal list of current neighbors in a form {mac: neighbor_object}
@@ -113,16 +128,26 @@ class ListenNeighbors(threading.Thread):
             self.check_expired_neighbors()
             self.last_expiry_check = time.time()
         if data.mac == self.node_mac:
+            NEIGHBOR_LOG.warning("Neighbor has the same mac address as mine! %s", self.node_mac)
             return False
         if data.mac not in self.neighbors_list:
             neighbor = Neighbor()
             neighbor.l3_addresses = data.l3_addresses
             neighbor.mac = data.mac
             self.neighbors_list[data.mac] = neighbor
-            # Adding an entry to the Route Table
+            # Adding an entry to the neighbors list
             self.add_neighbor_entry(neighbor)
+            # Add the entries for the received L3 ip addresses to the RouteTable
+            for ip in data.l3_addresses:
+                self.table.update_entry(ip, data.mac, 100)
+
         else:
-            self.neighbors_list[data.mac].l3_addresses = data.l3_addresses
+            if self.neighbors_list[data.mac].l3_addresses != data.l3_addresses:
+                self.neighbors_list[data.mac].l3_addresses = data.l3_addresses
+                # Add the entries for the received L3 ip addresses to the RouteTable
+                for ip in data.l3_addresses:
+                    self.table.update_entry(ip, data.mac, 100)
+
             self.neighbors_list[data.mac].last_activity = time.time()
 
         # Update the file with current list of neighbors' ip addresses
