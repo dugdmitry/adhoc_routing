@@ -124,4 +124,4 @@ class ArqRoutine(threading.Thread):
 
     def quit(self):
         self.running = False
-        self._Thread__stop()
+        # self._Thread__stop()

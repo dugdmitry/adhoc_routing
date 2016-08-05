@@ -98,7 +98,8 @@ class UdsServer(threading.Thread):
         
     def quit(self):
         self.running = False
-        self._Thread__stop()
+        # self._Thread__stop()
+        self.sock.close()
         # Removing the uds socket
         subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)
 
@@ -329,8 +330,7 @@ class RawTransport:
 
             # Else, do nothing with the received frame
             else:
-                # print "!!! THIS MAC HAS BEEN FILTERED !!! %s" % src_mac
-                pass
+                TRANSPORT_LOG.debug("!!! THIS MAC HAS BEEN FILTERED !!! %s", src_mac)
 
     # Receive and return dsr_header and upper layer data from the interface from ANY mac address without filtering
     def recv_data_no_filter(self):
@@ -342,7 +342,9 @@ class RawTransport:
             src_mac = self.get_src_mac(data[:14])
 
             if src_mac == self.node_mac:
-                TRANSPORT_LOG.debug("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
+                # This situation normally is not supposed to happen.
+                # Otherwise, it would mean that there are two or more nodes with the same MAC address, which is bad.
+                TRANSPORT_LOG.error("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
 
             # Else, return the data
             else:

@@ -71,10 +71,10 @@ class DataHandler:
         self.path_discovery_thread.quit()
         self.service_messages_handler_thread.quit()
 
-        self.app_handler_thread._Thread__stop()
-        self.incoming_traffic_handler_thread._Thread__stop()
-        self.path_discovery_thread._Thread__stop()
-        self.service_messages_handler_thread._Thread__stop()
+        # self.app_handler_thread._Thread__stop()
+        # self.incoming_traffic_handler_thread._Thread__stop()
+        # self.path_discovery_thread._Thread__stop()
+        # self.service_messages_handler_thread._Thread__stop()
 
         DATA_LOG.info("Traffic handlers are stopped")
 
@@ -502,9 +502,9 @@ class ServiceMessagesHandler(threading.Thread):
         self.reward_wait_list = reward_wait_list
 
     def quit(self):
-        self.raw_transport.close_raw_recv_socket()
         self.running = False
-    
+        # self.raw_transport.close_raw_recv_socket()
+
     def run(self):
         while self.running:
             dsr_header, raw_data = self.service_msg_queue.get()

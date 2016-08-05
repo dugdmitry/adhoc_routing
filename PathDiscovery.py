@@ -62,7 +62,7 @@ class PathDiscoveryHandler(threading.Thread):
         self.running = False
         # Stopping RREP handler
         self.rrep_handler_thread.quit()
-        self.rrep_handler_thread._Thread__stop()
+        # self.rrep_handler_thread._Thread__stop()
         # Stopping all running rreq_routines
         for i in self.rreq_thread_list:
             self.rreq_thread_list[i].quit()
@@ -129,7 +129,7 @@ class RreqRoutine(threading.Thread):
         
     def quit(self):
         self.running = False
-        self._Thread__stop()
+        # self._Thread__stop()
 
 
 # Class for handling incoming RREP messages
