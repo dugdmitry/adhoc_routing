@@ -70,9 +70,6 @@ class AdvertiseNeighbor(threading.Thread):
         self.table_obj = table_obj
         self.node_mac = node_mac
 
-        # Store current ip addresses assigned to this node
-        self.current_node_ips = list()
-
     def run(self):
         while self.running:
             self.send_raw_hello()
@@ -81,9 +78,9 @@ class AdvertiseNeighbor(threading.Thread):
     # Update node's own ips in the route table
     def update_ips_in_route_table(self, node_ips):
         for ip in node_ips:
-            if ip not in self.current_node_ips:
+            if ip not in self.table_obj.current_node_ips:
                 self.table_obj.update_entry(ip, self.node_mac, 1000)
-        self.current_node_ips = node_ips
+        self.table_obj.current_node_ips = node_ips
 
     def send_raw_hello(self):
         # Try to get L3 ip address (ipv4 or ipv6) assigned to the node, if there are such ones
@@ -93,7 +90,7 @@ class AdvertiseNeighbor(threading.Thread):
 
         self.message.l3_addresses = node_ips
 
-        NEIGHBOR_LOG.debug("Sending raw HELLO message")
+        NEIGHBOR_LOG.debug("Sending HELLO message:\n %s", self.message)
 
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(self.message))
         self.message.retries += 1

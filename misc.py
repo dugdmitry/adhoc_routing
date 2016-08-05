@@ -1,5 +1,6 @@
 
 import logging
+from random import randint
 
 class Resource:
     id_counter = 0
@@ -59,3 +60,36 @@ class Entry(dict):
 ent = Entry("src", "dst", [1, 2, 3, 4, 5])
 
 print ent["srcdst"]
+
+
+# Check hash function
+class RouteRequest:
+    dsr_type = 2
+
+    def __init__(self):
+        # self.id = randint(1, 1048575)   # Max value is 2**20 (20 bits)
+        self.src_ip = ""
+        self.dst_ip = ""
+        self.dsn = 0
+        self.hop_count = 0
+
+    # def __str__(self):
+    #     out_tuple = (str(self.id), str(self.src_ip), str(self.dst_ip), str(self.dsn), str(self.hop_count))
+    #     out_string = "ID: %s, SRC_IP: %s, DST_IP: %s, DSN: %s, HOP_COUNT: %s" % out_tuple
+    #
+    #     return out_string
+
+
+def create_obj():
+    a = RouteRequest()
+    print hash(a)
+    del a
+
+for i in range(10):
+    create_obj()
+
+
+
+
+
+

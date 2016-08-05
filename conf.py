@@ -1,7 +1,7 @@
-DEV = "wlan0"
+DEV = "eth0"
 VIRT_IFACE_NAME = "dsr0"
 UDS_ADDRESS = "/tmp/uds_socket"
-ABSOLUTE_PATH = "/root/SmartLighting/AdhocRouting/"
-LOG_LEVEL = "INFO"
-SET_TOPOLOGY_FLAG = False
+ABSOLUTE_PATH = "/home/fila/AdhocRouting/"
+LOG_LEVEL = "DEBUG"
+SET_TOPOLOGY_FLAG = True
 MONITORING_MODE_FLAG = False

@@ -134,7 +134,7 @@ class VirtualTransport:
         for addr in self.get_ipv6_address():
             addresses.append(addr)
 
-        return addresses
+        return filter(None, addresses)
         
     def get_ipv4_address(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

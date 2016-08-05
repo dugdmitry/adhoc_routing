@@ -45,9 +45,15 @@ class RouteReply:
 class HelloMessage:
     def __init__(self):
         self.id = randint(1, 1048575)
-        self.mac = ""
+        self.mac = str()
         self.l3_addresses = []      # A list of L3 addresses, assigned to this node
         self.retries = 0
+
+    def __str__(self):
+        out_tuple = (self.id, self.mac, self.l3_addresses, self.retries)
+        out_string = "ID: %s, MAC: %s, L3_addresses: %s, Retries_count: %s" % out_tuple
+
+        return out_string
 
 
 # Describes an ACK message from one of the service messages
@@ -67,8 +73,14 @@ class AckMessage:
 class RewardMessage:
     def __init__(self):
         self.id = randint(1, 1048575)
-        self.dst_ip = str()
+        self.msg_hash = int()
         self.reward_value = float()
+
+    def __str__(self):
+        out_tuple = (self.id, self.msg_hash, self.reward_value)
+        out_string = "ID: %s, MSG_HASH: %s, REWARD_VALUE: %s" % out_tuple
+
+        return out_string
 
 
 class DsrHeader:
@@ -96,8 +108,6 @@ class DsrHeader:
             self.tx_mac = "00:00:00:00:00:00"
             self.broadcast_id = randint(1, 1048575)
             self.broadcast_ttl = 0               # A number of hops the broadcast packets have gone through
-            # self.broadcast_id = DsrHeader.broadcast_id_counter
-            # DsrHeader.broadcast_id_counter += 1
         else:
             self.header_format = DsrHeader.unicast_header_format
             self.src_mac = "00:00:00:00:00:00"
