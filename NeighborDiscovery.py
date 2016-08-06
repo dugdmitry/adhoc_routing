@@ -46,9 +46,6 @@ class NeighborDiscovery:
         self.listen_thread.quit()
         self.advertise_thread.quit()
 
-        # self.listen_thread._Thread__stop()
-        # self.advertise_thread._Thread__stop()
-
         NEIGHBOR_LOG.info("NeighborDiscovery threads are stopped")
 
 

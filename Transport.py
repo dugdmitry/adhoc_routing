@@ -191,6 +191,9 @@ class VirtualTransport:
         data = struct.unpack("!" + ipv4_format, packet[4:24])
         src_ip = self.int2ipv4(data[-2])
         dst_ip = self.int2ipv4(data[-1])
+
+        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
+
         return [src_ip, dst_ip]
     
     def get_data_from_ipv6_header(self, packet):
@@ -200,7 +203,9 @@ class VirtualTransport:
                 
         src_ip = self.int2ipv6(data[-2])
         dst_ip = self.int2ipv6(data[-1])
-        
+
+        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
+
         return [src_ip, dst_ip]
     
     def int2ipv4(self, addr):
@@ -215,11 +220,11 @@ class VirtualTransport:
     # Receive raw data from virtual interface. Return a list in a form: [src_ip, dst_ip, raw_data]
     def recv_from_app(self):
         output = os.read(self.f, 65000)
-        addresses = self.get_L3_addresses_from_packet(output)
+        # addresses = self.get_L3_addresses_from_packet(output)
+        # TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s", addresses)
 
-        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s", addresses)
-
-        return addresses + [output]
+        # return addresses + [output]
+        return output
 
 
 # Class for interacting with raw sockets

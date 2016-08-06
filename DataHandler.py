@@ -26,7 +26,7 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
-    def __init__(self, app_transport, app_queue, neighbor_routine, raw_transport, table):
+    def __init__(self, app_transport, neighbor_routine, raw_transport, table):
         # Create an arq handler object
         arq_handler = ArqHandler.ArqHandler(raw_transport)
 
@@ -45,13 +45,14 @@ class DataHandler:
         reward_wait_list = dict()
 
         # Creating thread objects
-        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(app_queue, wait_queue,
+        self.app_handler_thread = AppHandler(app_transport, wait_queue, raw_transport, table,
+                                             reward_wait_list, broadcast_list)
+
+        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(self.app_handler_thread.app_queue, wait_queue,
                                                                         rrep_queue, arq_handler, table)
 
-        self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport,
-                                             table, reward_wait_list, broadcast_list)
-
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue,
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler_thread.app_queue,
+                                                                      service_msg_queue,
                                                                       neighbor_routine.hello_msg_queue,
                                                                       app_transport, raw_transport, table,
                                                                       reward_wait_list, broadcast_list)
@@ -72,24 +73,22 @@ class DataHandler:
         self.path_discovery_thread.quit()
         self.service_messages_handler_thread.quit()
 
-        # self.app_handler_thread._Thread__stop()
-        # self.incoming_traffic_handler_thread._Thread__stop()
-        # self.path_discovery_thread._Thread__stop()
-        # self.service_messages_handler_thread._Thread__stop()
-
         DATA_LOG.info("Traffic handlers are stopped")
 
 
 class AppHandler(threading.Thread):
-    def __init__(self, app_queue, wait_queue, raw_transport, table, reward_wait_list, broadcast_list):
+    def __init__(self, app_transport, wait_queue, raw_transport, table, reward_wait_list, broadcast_list):
         super(AppHandler, self).__init__()
         self.running = True
-        self.app_queue = app_queue
+        # self.app_queue = app_queue
+        # Create a queue for in coming app data
+        self.app_queue = Queue.Queue()
         self.wait_queue = wait_queue
         self.table = table
         self.broadcast_list = broadcast_list
-        
-        self.transport = raw_transport
+
+        self.app_transport = app_transport
+        self.raw_transport = raw_transport
         self.node_mac = raw_transport.node_mac
 
         self.broadcast_mac = raw_transport.broadcast_mac
@@ -102,15 +101,11 @@ class AppHandler(threading.Thread):
 
     def run(self):
         while self.running:
-            src_ip, dst_ip, raw_data = self.app_queue.get()
-
-            # # Lookup for a corresponding dst_mac in the arp table
-            # dst_mac = self.table.lookup_mac_address(dst_ip)
-
-            # # Check whether the destination IP exists in the Route Table
-            # lock.acquire()
-            # entry = self.table.lookup_entry(dst_mac)
-            # lock.release()
+            # src_ip, dst_ip, raw_data = self.app_queue.get()
+            # Get packet from queue
+            packet = self.app_queue.get()
+            # Get the src_ip and dst_ip from the packet
+            src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(packet)
 
             # Try to find a mac address of the next hop where a packet should be forwarded to
             next_hop_mac = self.table.get_next_hop_mac(dst_ip)
@@ -130,7 +125,7 @@ class AppHandler(threading.Thread):
                 DATA_LOG.debug("Trying to send the broadcast...")
 
                 # Broadcast it further to the network
-                self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+                self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, packet)
 
                 DATA_LOG.debug("Broadcast sent!!!")
 
@@ -148,7 +143,7 @@ class AppHandler(threading.Thread):
                 DATA_LOG.debug("Trying to send the broadcast...")
 
                 # Broadcast it further to the network
-                self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+                self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, packet)
 
                 DATA_LOG.debug("Broadcast sent!!!")
 
@@ -166,7 +161,7 @@ class AppHandler(threading.Thread):
                 DATA_LOG.debug("Trying to send the broadcast...")
 
                 # Broadcast it further to the network
-                self.transport.send_raw_frame(self.broadcast_mac, dsr_header, raw_data)
+                self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_header, packet)
 
                 DATA_LOG.debug("Broadcast sent!!!")
 
@@ -178,7 +173,7 @@ class AppHandler(threading.Thread):
 
                 # ## Start PathDiscovery procedure ## #
                 # Put packet in wait_queue
-                self.wait_queue.put([src_ip, dst_ip, raw_data])
+                self.wait_queue.put([src_ip, dst_ip, packet])
 
             # Else, the packet is unicast, and has the corresponding Entry.
             # Forward packet to the next hop. Start a thread wor waiting an ACK with reward.
@@ -189,7 +184,7 @@ class AppHandler(threading.Thread):
                 # Create a unicast dsr header with proper values
                 dsr_header = self.create_dsr_unicast_header()
                 # Send the raw data with dsr_header to the next hop
-                self.transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
+                self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, packet)
 
                 hash_value = hash(dst_ip + next_hop_mac)
                 # Start a thread for receiving a reward value on a given dst_ip
@@ -202,6 +197,10 @@ class AppHandler(threading.Thread):
                     reward_wait_thread.start()
 
         DATA_LOG.debug("LOOP FINISHED!!!")
+
+    # Provides callback for processing the data packets which have come from different threads
+    def process_packet(self, packet):
+        self.app_queue.put(packet)
 
     def create_dsr_unicast_header(self):
         _type = 0                                       # Type 0 corresponds to the data packets
@@ -321,44 +320,44 @@ class IncomingTrafficHandler(threading.Thread):
     def run(self):
         while self.running:
 
-            dsr_header, raw_data = self.raw_transport.recv_data()
+            dsr_header, packet = self.raw_transport.recv_data()
 
             dsr_type = dsr_header.type
 
             # If it's a data packet, handle it accordingly
             if dsr_type == 0:
-                self.handle_data_packet(dsr_header, raw_data)
+                self.handle_data_packet(dsr_header, packet)
 
             # If the dsr packet contains HELLO message from the neighbour
             elif dsr_type == 1:
                 # Handle HELLO message
-                self.hello_msg_queue.put(raw_data)
+                self.hello_msg_queue.put(packet)
 
             # If dsr packet contains some service message: RREQ, RREP, ACK or Reward (types 2, 3, 5 or 6)
             elif dsr_type == 2 or dsr_type == 3 or dsr_type == 5 or dsr_type == 6:
                 # Handle RREQ / RREP / ACK / Reward
                 DATA_LOG.debug("Got service message. TYPE: %s", dsr_type)
 
-                self.service_msg_queue.put([dsr_header, raw_data])
+                self.service_msg_queue.put([dsr_header, packet])
 
             # If the packet is the broadcast one, either broadcast it further or drop it
             elif dsr_type == 4:
 
                 DATA_LOG.debug("Received broadcast TTL: %s", dsr_header.broadcast_ttl)
 
-                self.handle_broadcast_packet(dsr_header, raw_data)
+                self.handle_broadcast_packet(dsr_header, packet)
 
     # Check the dst_mac from dsr_header. If it matches the node's own mac -> send it up to the virtual interface
     # If the packet carries the data, either send it to the next hop, or,
     # if there is no such one, put it to the AppQueue, or,
     # if the dst_mac equals to the node's mac, send the packet up to the application
-    def handle_data_packet(self, dsr_header, raw_data):
+    def handle_data_packet(self, dsr_header, packet):
         # dst_mac = dsr_header.dst_mac
         # Generate and send back a reward message to the node which has sent this packet
         mac = dsr_header.tx_mac
 
         # Get src_ip, dst_ip from the incoming packet
-        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(raw_data)
+        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(packet)
 
         # Start send thread
         hash_value = hash(dst_ip + mac)
@@ -372,28 +371,24 @@ class IncomingTrafficHandler(threading.Thread):
 
             DATA_LOG.debug("Sending packet with to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
 
-            self.send_up(raw_data)
+            self.send_up(packet)
 
         # Else, try to find the next hop in the route table
         else:
-            # lock.acquire()
-            # entry = self.table.lookup_entry(dst_mac)
-            # lock.release()
-
             next_hop_mac = self.table.get_next_hop_mac(dst_ip)
             DATA_LOG.debug("IncomingTraffic: For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
             DATA_LOG.debug("Current entry: %s", self.table.get_entry(dst_ip))
 
             # If no entry is found, put the packet to the initial AppQueue
             if next_hop_mac is None:
-                self.app_queue.put([src_ip, dst_ip, raw_data])
+                # self.app_queue.put([src_ip, dst_ip, raw_data])
+                self.app_queue.put(packet)
 
             # Else, forward the packet to the next_hop. Start a reward wait thread, if necessary.
             else:
-                # next_hop_mac = entry.next_hop_mac
                 dsr_header.tx_mac = self.node_mac
                 # Send the raw data with dsr_header to the next hop
-                self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, raw_data)
+                self.raw_transport.send_raw_frame(next_hop_mac, dsr_header, packet)
 
                 hash_value = hash(dst_ip + next_hop_mac)
                 # Start a thread for receiving a reward value on a given dst_ip
@@ -407,13 +402,12 @@ class IncomingTrafficHandler(threading.Thread):
 
     # Handle data packet, if in monitoring mode. If the dst_mac is the mac of the receiving node,
     # send the packet up to the application, otherwise, discard the packet
-    def handle_data_packet_monitoring_mode(self, dsr_header, raw_data):
-        # dst_mac = dsr_header.dst_mac
+    def handle_data_packet_monitoring_mode(self, dsr_header, packet):
         # Generate and send back a reward message to the node which has sent this packet
         mac = dsr_header.tx_mac
 
         # Get src_ip, dst_ip from the incoming packet
-        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(raw_data)
+        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(packet)
 
         # Start send thread
         hash_value = hash(dst_ip + mac)
@@ -427,7 +421,7 @@ class IncomingTrafficHandler(threading.Thread):
 
             DATA_LOG.debug("Sending packet with to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
 
-            self.send_up(raw_data)
+            self.send_up(packet)
 
         # In all other cases, discard the packet
         else:
@@ -494,7 +488,6 @@ class ServiceMessagesHandler(threading.Thread):
 
     def quit(self):
         self.running = False
-        # self.raw_transport.close_raw_recv_socket()
 
     def run(self):
         while self.running:

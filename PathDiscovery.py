@@ -38,7 +38,8 @@ class PathDiscoveryHandler(threading.Thread):
             if dst_ip in self.rreq_list:
 
                 lock.acquire()
-                self.rreq_list[dst_ip].append([src_ip, dst_ip, raw_data])
+                # self.rreq_list[dst_ip].append([src_ip, dst_ip, raw_data])
+                self.rreq_list[dst_ip].append(raw_data)
 
                 PATH_DISCOVERY_LOG.info("Got DST_IP in rreq list: %s", dst_ip)
                 PATH_DISCOVERY_LOG.debug("RREQ LIST: %s", self.rreq_list[dst_ip])
@@ -51,7 +52,8 @@ class PathDiscoveryHandler(threading.Thread):
                 PATH_DISCOVERY_LOG.info("No DST_IP in rreq list: %s", dst_ip)
 
                 lock.acquire()
-                self.rreq_list[dst_ip] = [[src_ip, dst_ip, raw_data]]
+                # self.rreq_list[dst_ip] = [[src_ip, dst_ip, raw_data]]
+                self.rreq_list[dst_ip] = [raw_data]
                 self.rreq_thread_list[dst_ip] = RreqRoutine(self.arq_handler, self.table,
                                                             self.rreq_list, self.rreq_thread_list, src_ip, dst_ip)
                 lock.release()
@@ -62,8 +64,6 @@ class PathDiscoveryHandler(threading.Thread):
         self.running = False
         # Stopping RREP handler
         self.rrep_handler_thread.quit()
-        # self.rrep_handler_thread._Thread__stop()
-        # Stopping all running rreq_routines
         for i in self.rreq_thread_list:
             self.rreq_thread_list[i].quit()
 
@@ -129,7 +129,6 @@ class RreqRoutine(threading.Thread):
         
     def quit(self):
         self.running = False
-        # self._Thread__stop()
 
 
 # Class for handling incoming RREP messages
@@ -162,7 +161,7 @@ class RrepHandler(threading.Thread):
                 # Send the packets back to original app_queue
                 for packet in data:
 
-                    PATH_DISCOVERY_LOG.info("Putting delayed packets in app_queue...")
+                    PATH_DISCOVERY_LOG.info("Putting delayed packets back to app_queue...")
                     PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet[1]))
 
                     self.app_queue.put(packet)
