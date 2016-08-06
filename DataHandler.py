@@ -6,6 +6,7 @@ Created on Oct 6, 2014
 """
 
 import Messages
+import Transport
 import PathDiscovery
 import ArqHandler
 
@@ -26,7 +27,7 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
-    def __init__(self, app_transport, neighbor_routine, raw_transport, table):
+    def __init__(self, app_transport, raw_transport, neighbor_routine, table):
         # Create an arq handler object
         arq_handler = ArqHandler.ArqHandler(raw_transport)
 
@@ -45,8 +46,7 @@ class DataHandler:
         reward_wait_list = dict()
 
         # Creating thread objects
-        self.app_handler_thread = AppHandler(app_transport, wait_queue, raw_transport, table,
-                                             reward_wait_list, broadcast_list)
+        self.app_handler_thread = AppHandler(wait_queue, raw_transport, table, reward_wait_list, broadcast_list)
 
         self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(self.app_handler_thread.app_queue, wait_queue,
                                                                         rrep_queue, arq_handler, table)
@@ -77,17 +77,15 @@ class DataHandler:
 
 
 class AppHandler(threading.Thread):
-    def __init__(self, app_transport, wait_queue, raw_transport, table, reward_wait_list, broadcast_list):
+    def __init__(self, wait_queue, raw_transport, table, reward_wait_list, broadcast_list):
         super(AppHandler, self).__init__()
         self.running = True
-        # self.app_queue = app_queue
         # Create a queue for in coming app data
         self.app_queue = Queue.Queue()
         self.wait_queue = wait_queue
         self.table = table
         self.broadcast_list = broadcast_list
 
-        self.app_transport = app_transport
         self.raw_transport = raw_transport
         self.node_mac = raw_transport.node_mac
 
@@ -105,7 +103,8 @@ class AppHandler(threading.Thread):
             # Get packet from queue
             packet = self.app_queue.get()
             # Get the src_ip and dst_ip from the packet
-            src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(packet)
+            # src_ip, dst_ip = self.app_transport.get_l3_addresses_from_packet(packet)
+            src_ip, dst_ip = Transport.get_l3_addresses_from_packet(packet)
 
             # Try to find a mac address of the next hop where a packet should be forwarded to
             next_hop_mac = self.table.get_next_hop_mac(dst_ip)
@@ -357,7 +356,8 @@ class IncomingTrafficHandler(threading.Thread):
         mac = dsr_header.tx_mac
 
         # Get src_ip, dst_ip from the incoming packet
-        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(packet)
+        # src_ip, dst_ip = self.app_transport.get_l3_addresses_from_packet(packet)
+        src_ip, dst_ip = Transport.get_l3_addresses_from_packet(packet)
 
         # Start send thread
         hash_value = hash(dst_ip + mac)
@@ -407,7 +407,8 @@ class IncomingTrafficHandler(threading.Thread):
         mac = dsr_header.tx_mac
 
         # Get src_ip, dst_ip from the incoming packet
-        src_ip, dst_ip = self.app_transport.get_L3_addresses_from_packet(packet)
+        # src_ip, dst_ip = self.app_transport.get_l3_addresses_from_packet(packet)
+        src_ip, dst_ip = Transport.get_l3_addresses_from_packet(packet)
 
         # Start send thread
         hash_value = hash(dst_ip + mac)

@@ -80,6 +80,54 @@ def get_l3_addresses_from_interface():
     return filter(None, addresses)
 
 
+# Define a static function which will return src and dst L3 address of the given packet.
+# For now, only IPv4 and IPv6 protocols are supported.
+def get_l3_addresses_from_packet(packet):
+    def get_data_from_ipv4_header(ipv4_packet):
+        ipv4_format = "bbHHHBBHII"  # IPv4 header mask for parsing from binary data
+        data = struct.unpack("!" + ipv4_format, ipv4_packet[4:24])
+        src_ip = int2ipv4(data[-2])
+        dst_ip = int2ipv4(data[-1])
+
+        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
+
+        return [src_ip, dst_ip]
+
+    def get_data_from_ipv6_header(ipv6_packet):
+        ipv6_format = "IHBB16s16s"  # IPv6 header mask for parsing from binary data
+
+        data = struct.unpack("!" + ipv6_format, ipv6_packet[4:44])  # 40 bytes is the ipv6 header size
+
+        src_ip = int2ipv6(data[-2])
+        dst_ip = int2ipv6(data[-1])
+
+        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
+
+        return [src_ip, dst_ip]
+
+    def int2ipv4(addr):
+        return socket.inet_ntoa(struct.pack("!I", addr))
+
+    def int2ipv6(addr):
+        return socket.inet_ntop(socket.AF_INET6, addr)
+
+    # Get L3 protocol identifier
+    l3_id = struct.unpack("!H", packet[2:4])[0]
+
+    TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
+
+    if l3_id == int(IP4_ID):
+        addresses = get_data_from_ipv4_header(packet)
+        return addresses
+    elif l3_id == int(IP6_ID):
+        addresses = get_data_from_ipv6_header(packet)
+        return addresses
+    else:
+        # The packet has UNSUPPORTED L3 protocol, drop it
+        TRANSPORT_LOG.warning("The packet has UNSUPPORTED L3 protocol, dropping the packet")
+        return None
+
+
 class UdsClient:
     def __init__(self, server_address):
         self.server_address = server_address
@@ -155,147 +203,68 @@ class VirtualTransport:
         f = os.open("/dev/net/tun", os.O_RDWR)
         ioctl(f, TUNSETIFF, struct.pack("16sH", VIRT_IFACE_NAME, tun_mode))
 
-        self.setMtu(VIRT_IFACE_NAME, 1400)      # !!! MTU value is fixed for now. !!!
-        self.interfaceUp(VIRT_IFACE_NAME)
+        self.set_mtu(VIRT_IFACE_NAME, 1400)      # !!! MTU value is fixed for now. !!!
+        self.interface_up(VIRT_IFACE_NAME)
         
         self.f = f
                 
-    def setMtu(self, iface, mtu):
+    def set_mtu(self, iface, mtu):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ifreq = struct.pack('16sI', iface, int(mtu))
         ioctl(sock, SIOCSIFMTU, ifreq)
         
     # Up the interface
-    def interfaceUp(self, iface):
+    def interface_up(self, iface):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ifreq = struct.pack('16sH', iface, IFF_UP)
         ioctl(sock, SIOCSIFFLAGS, ifreq)
-    
-    # # Returns a list of ip addresses assigned to the virtual interface (in a form of:
-    # # [<ipv4 address>, <ipv6 address1>,  <ipv6 address2>,  <ipv6 addressN>])
-    # @staticmethod
-    # def get_l3_addresses_from_interface():
-    #     def get_ipv4_address():
-    #         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    #         try:
-    #             addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
-    #         except IOError:
-    #             # No IPv4 address was assigned"
-    #             TRANSPORT_LOG.debug("No IPv4 address assigned!")
-    #             return None
-    #
-    #         return socket.inet_ntoa(addr)
-    #
-    #     def get_ipv6_address():
-    #         addresses = []
-    #         f = open("/proc/net/if_inet6", "r")
-    #         data = f.read().split("\n")[:-1]
-    #
-    #         for row in data:
-    #             if row.split(" ")[-1] == VIRT_IFACE_NAME:
-    #                 addresses.append(row.split(" ")[0])
-    #
-    #         if addresses != []:
-    #             output = []
-    #             for addr in addresses:
-    #                 addr = ":".join([addr[i:i + 4] for i in range(0, len(addr), 4)])
-    #                 addr = socket.inet_pton(socket.AF_INET6, addr)
-    #                 output.append(socket.inet_ntop(socket.AF_INET6, addr))
-    #             return output
-    #         else:
-    #             # No IPv6 addresses were assigned"
-    #             TRANSPORT_LOG.debug("No IPv6 address assigned!")
-    #
-    #             return [None]
-    #
-    #     addresses = list()
-    #     addresses.append(get_ipv4_address())
-    #     for addr in get_ipv6_address():
-    #         addresses.append(addr)
-    #
-    #     return filter(None, addresses)
 
-    # @staticmethod
-    # def get_ipv4_address():
-    #     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    #     try:
-    #         addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
-    #     except IOError:
-    #         # No IPv4 address was assigned"
-    #         TRANSPORT_LOG.debug("No IPv4 address assigned!")
-    #         return None
+    # def get_l3_addresses_from_packet(self, packet):
+    #     l3_id = struct.unpack("!H", packet[2:4])[0]
     #
-    #     return socket.inet_ntoa(addr)
-
-    # @staticmethod
-    # def get_ipv6_address(self):
-    #     addresses = []
-    #     f = open("/proc/net/if_inet6", "r")
-    #     data = f.read().split("\n")[:-1]
+    #     TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
     #
-    #     for row in data:
-    #         if row.split(" ")[-1] == VIRT_IFACE_NAME:
-    #             addresses.append(row.split(" ")[0])
-    #
-    #     if addresses != []:
-    #         output = []
-    #         for addr in addresses:
-    #             addr = ":".join([addr[i:i+4] for i in range(0, len(addr), 4)])
-    #             addr = socket.inet_pton(socket.AF_INET6, addr)
-    #             output.append(socket.inet_ntop(socket.AF_INET6, addr))
-    #         return output
+    #     if l3_id == int(IP4_ID):
+    #         addresses = self.get_data_from_ipv4_header(packet)
+    #         return addresses
+    #     elif l3_id == int(IP6_ID):
+    #         addresses = self.get_data_from_ipv6_header(packet)
+    #         return addresses
     #     else:
-    #         # No IPv6 addresses were assigned"
-    #         TRANSPORT_LOG.debug("No IPv6 address assigned!")
+    #         # The packet has UNSUPPORTED L3 protocol, drop it
+    #         TRANSPORT_LOG.warning("The packet has UNSUPPORTED L3 protocol, dropping the packet")
+    #         pass
+        
+    # def get_data_from_ipv4_header(self, packet):
+    #     ipv4_format = "bbHHHBBHII"       # IPv4 header mask for parsing from binary data
+    #     data = struct.unpack("!" + ipv4_format, packet[4:24])
+    #     src_ip = self.int2ipv4(data[-2])
+    #     dst_ip = self.int2ipv4(data[-1])
     #
-    #         return [None]
-        
-    def get_L3_addresses_from_packet(self, packet):
-        l3_id = struct.unpack("!H", packet[2:4])[0]
-
-        TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
-        
-        if l3_id == int(IP4_ID):
-            addresses = self.get_data_from_ipv4_header(packet)
-            return addresses
-        elif l3_id == int(IP6_ID):
-            addresses = self.get_data_from_ipv6_header(packet)
-            return addresses
-        else:
-            # The packet has UNSUPPORTED L3 protocol, drop it
-            TRANSPORT_LOG.warning("The packet has UNSUPPORTED L3 protocol, dropping the packet")
-            pass
-        
-    def get_data_from_ipv4_header(self, packet):
-        ipv4_format = "bbHHHBBHII"       # IPv4 header mask for parsing from binary data
-        data = struct.unpack("!" + ipv4_format, packet[4:24])
-        src_ip = self.int2ipv4(data[-2])
-        dst_ip = self.int2ipv4(data[-1])
-
-        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
-
-        return [src_ip, dst_ip]
+    #     TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
+    #
+    #     return [src_ip, dst_ip]
+    #
+    # def get_data_from_ipv6_header(self, packet):
+    #     ipv6_format = "IHBB16s16s"       # IPv6 header mask for parsing from binary data
+    #
+    #     data = struct.unpack("!" + ipv6_format, packet[4:44])       # 40 bytes is the ipv6 header size
+    #
+    #     src_ip = self.int2ipv6(data[-2])
+    #     dst_ip = self.int2ipv6(data[-1])
+    #
+    #     TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
+    #
+    #     return [src_ip, dst_ip]
     
-    def get_data_from_ipv6_header(self, packet):
-        ipv6_format = "IHBB16s16s"       # IPv6 header mask for parsing from binary data
-        
-        data = struct.unpack("!" + ipv6_format, packet[4:44])       # 40 bytes is the ipv6 header size
-                
-        src_ip = self.int2ipv6(data[-2])
-        dst_ip = self.int2ipv6(data[-1])
-
-        TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
-
-        return [src_ip, dst_ip]
+    # def int2ipv4(self, addr):
+    #     return socket.inet_ntoa(struct.pack("!I", addr))
+    #
+    # def int2ipv6(self, addr):
+    #     return socket.inet_ntop(socket.AF_INET6, addr)
     
-    def int2ipv4(self, addr):
-        return socket.inet_ntoa(struct.pack("!I", addr))
-
-    def int2ipv6(self, addr):
-        return socket.inet_ntop(socket.AF_INET6, addr)
-    
-    def send_to_app(self, data):
-        os.write(self.f, data)
+    def send_to_app(self, packet):
+        os.write(self.f, packet)
         
     # Receive raw data from virtual interface. Return a list in a form: [src_ip, dst_ip, raw_data]
     def recv_from_app(self):

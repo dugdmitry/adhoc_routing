@@ -17,6 +17,7 @@ TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route
 lock = threading.Lock()
 
 
+# TODO: move RL methods to separate module
 # Class for assigning current estimated value for a given action.
 # Provides method for returning this value.
 class ValueEstimator:

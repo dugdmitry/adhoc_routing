@@ -179,22 +179,23 @@ class RoutingDaemon(Daemon):
 
         # Get mac address of the network interface
         node_mac = self.get_mac(DEV)
-        # Creating a transport for communication with a virtual interface
-        app_transport = Transport.VirtualTransport()
         # Creating a raw_transport object for sending DSR-like packets over the given interface
         topology_neighbors = self.get_topology_neighbors(node_mac)
+        # Creating a transport for communication with a virtual interface
+        app_transport = Transport.VirtualTransport()
+        # Creating a transport for communication with network physical interface
         raw_transport = Transport.RawTransport(DEV, node_mac, topology_neighbors)
         # Create a RouteTable object
         table = RouteTable.Table(node_mac)
         # Create a Neighbor routine thread
         neighbor_routine = NeighborDiscovery.NeighborDiscovery(raw_transport, table)
         # Create data handler thread to process all incoming and outgoing messages
-        data_handler = DataHandler.DataHandler(app_transport, neighbor_routine, raw_transport, table)
+        data_handler = DataHandler.DataHandler(app_transport, raw_transport, neighbor_routine, table)
         # Creating thread for live configuration / interaction with the running program
         uds_server = Transport.UdsServer(UDS_ADDRESS)
 
         try:
-            # Start app_data thread
+            # Start data handler thread
             data_handler.run()
             # Start Neighbor Discovery procedure
             neighbor_routine.run()
