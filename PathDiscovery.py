@@ -161,7 +161,7 @@ class RrepHandler(threading.Thread):
                 for packet in data:
 
                     PATH_DISCOVERY_LOG.info("Putting delayed packets back to app_queue...")
-                    PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet[1]))
+                    PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet))
 
                     self.app_queue.put(packet)
                 

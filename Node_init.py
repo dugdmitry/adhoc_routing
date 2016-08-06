@@ -240,14 +240,6 @@ class RoutingDaemon(Daemon):
 
         # If nothing was found, return an empty list
         return list()
-            
-    # def get_mac(self, interface):
-    #     # Return the MAC address of interface
-    #     try:
-    #         string = open('/sys/class/net/%s/address' % interface).readline()
-    #     except:
-    #         string = "00:00:00:00:00:00"
-    #     return string[:17]
 
 
 if __name__ == "__main__":

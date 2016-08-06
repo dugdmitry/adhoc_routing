@@ -90,7 +90,6 @@ class AppHandler(threading.Thread):
         # # Define a structure for handling reward wait threads for given dst_ips.
         # # Format: {hash(dst_ip + next_hop_mac): thread_object}.
         # # A reward value is being forwarded to the thread via a queue_object.
-        # self.reward_wait_list = dict()
         self.reward_wait_list = reward_wait_list
 
     def run(self):
