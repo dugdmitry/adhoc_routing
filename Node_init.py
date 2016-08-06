@@ -10,7 +10,6 @@ import RouteTable
 import Transport
 import NeighborDiscovery
 
-import Queue
 import sys
 import os
 import time
@@ -178,7 +177,7 @@ class RoutingDaemon(Daemon):
         ROUTING_LOG.info("Running the routing instance...")
 
         # Get mac address of the network interface
-        node_mac = self.get_mac(DEV)
+        node_mac = Transport.get_mac(DEV)
         # Creating a raw_transport object for sending DSR-like packets over the given interface
         topology_neighbors = self.get_topology_neighbors(node_mac)
         # Creating a transport for communication with a virtual interface
@@ -219,7 +218,7 @@ class RoutingDaemon(Daemon):
         return 0
 
     # Get the topology neighbors of a given node from the topology_list.
-    # It is needed for correct filtering the broadcast frames sent via raw sockets
+    # It is needed for correct filtering the broadcast frames sent via raw sockets.
     def get_topology_neighbors(self, node_mac):
         # Open a default topology file, if it exists
         try:
@@ -242,13 +241,13 @@ class RoutingDaemon(Daemon):
         # If nothing was found, return an empty list
         return list()
             
-    def get_mac(self, interface):
-        # Return the MAC address of interface
-        try:
-            string = open('/sys/class/net/%s/address' % interface).readline()
-        except:
-            string = "00:00:00:00:00:00"
-        return string[:17]
+    # def get_mac(self, interface):
+    #     # Return the MAC address of interface
+    #     try:
+    #         string = open('/sys/class/net/%s/address' % interface).readline()
+    #     except:
+    #         string = "00:00:00:00:00:00"
+    #     return string[:17]
 
 
 if __name__ == "__main__":

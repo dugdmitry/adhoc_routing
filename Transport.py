@@ -36,6 +36,16 @@ IP4_ID = 0x0800
 IP6_ID = 0x86DD
 
 
+# Define a static function which will return a mac address from the given network interface name
+def get_mac(interface_name):
+    # Return the MAC address of interface
+    try:
+        string = open('/sys/class/net/%s/address' % interface_name).readline()
+    except IOError:
+        string = "00:00:00:00:00:00"
+    return string[:17]
+
+
 # Define a static function which will return a list of ip addresses assigned to the virtual interface (in a form of:
 # [<ipv4 address>, <ipv6 address1>,  <ipv6 address2>,  <ipv6 addressN>])
 def get_l3_addresses_from_interface():
@@ -219,60 +229,12 @@ class VirtualTransport:
         ifreq = struct.pack('16sH', iface, IFF_UP)
         ioctl(sock, SIOCSIFFLAGS, ifreq)
 
-    # def get_l3_addresses_from_packet(self, packet):
-    #     l3_id = struct.unpack("!H", packet[2:4])[0]
-    #
-    #     TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
-    #
-    #     if l3_id == int(IP4_ID):
-    #         addresses = self.get_data_from_ipv4_header(packet)
-    #         return addresses
-    #     elif l3_id == int(IP6_ID):
-    #         addresses = self.get_data_from_ipv6_header(packet)
-    #         return addresses
-    #     else:
-    #         # The packet has UNSUPPORTED L3 protocol, drop it
-    #         TRANSPORT_LOG.warning("The packet has UNSUPPORTED L3 protocol, dropping the packet")
-    #         pass
-        
-    # def get_data_from_ipv4_header(self, packet):
-    #     ipv4_format = "bbHHHBBHII"       # IPv4 header mask for parsing from binary data
-    #     data = struct.unpack("!" + ipv4_format, packet[4:24])
-    #     src_ip = self.int2ipv4(data[-2])
-    #     dst_ip = self.int2ipv4(data[-1])
-    #
-    #     TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
-    #
-    #     return [src_ip, dst_ip]
-    #
-    # def get_data_from_ipv6_header(self, packet):
-    #     ipv6_format = "IHBB16s16s"       # IPv6 header mask for parsing from binary data
-    #
-    #     data = struct.unpack("!" + ipv6_format, packet[4:44])       # 40 bytes is the ipv6 header size
-    #
-    #     src_ip = self.int2ipv6(data[-2])
-    #     dst_ip = self.int2ipv6(data[-1])
-    #
-    #     TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s, %s", src_ip, dst_ip)
-    #
-    #     return [src_ip, dst_ip]
-    
-    # def int2ipv4(self, addr):
-    #     return socket.inet_ntoa(struct.pack("!I", addr))
-    #
-    # def int2ipv6(self, addr):
-    #     return socket.inet_ntop(socket.AF_INET6, addr)
-    
     def send_to_app(self, packet):
         os.write(self.f, packet)
         
     # Receive raw data from virtual interface. Return a list in a form: [src_ip, dst_ip, raw_data]
     def recv_from_app(self):
         output = os.read(self.f, 65000)
-        # addresses = self.get_L3_addresses_from_packet(output)
-        # TRANSPORT_LOG.debug("SRC and DST IPs got from the packet: %s", addresses)
-
-        # return addresses + [output]
         return output
 
 

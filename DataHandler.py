@@ -29,12 +29,8 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 class DataHandler:
     def __init__(self, app_transport, raw_transport, neighbor_routine, table):
         # Create an arq handler instance
-        arq_handler = ArqHandler.ArqHandler(raw_transport)
+        arq_handler = ArqHandler.ArqHandler(raw_transport, table)
 
-        # # Creating a queue for receiving RREPs
-        # rrep_queue = Queue.Queue()
-        # # Creating a queue for the delayed packets waiting for rrep message
-        # wait_queue = Queue.Queue()
         # Creating a queue for handling incoming RREQ and RREP packets from the raw_socket
         service_msg_queue = Queue.Queue()
         # Creating a deque list for keeping the received broadcast IDs
@@ -47,9 +43,6 @@ class DataHandler:
 
         # Creating thread objects
         self.app_handler_thread = AppHandler(arq_handler, raw_transport, table, reward_wait_list, broadcast_list)
-
-        # self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(self.app_handler_thread.app_queue, wait_queue,
-        #                                                                 rrep_queue, arq_handler, table)
 
         self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler_thread.app_queue,
                                                                       service_msg_queue,
@@ -65,13 +58,11 @@ class DataHandler:
     def run(self):
         self.app_handler_thread.start()
         self.incoming_traffic_handler_thread.start()
-        # self.path_discovery_thread.start()
         self.service_messages_handler_thread.start()
 
     def stop_threads(self):
         self.app_handler_thread.quit()
         self.incoming_traffic_handler_thread.quit()
-        # self.path_discovery_thread.quit()
         self.service_messages_handler_thread.quit()
 
         DATA_LOG.info("Traffic handlers are stopped")
@@ -83,10 +74,7 @@ class AppHandler(threading.Thread):
         self.running = True
         # Create a queue for incoming app data
         self.app_queue = Queue.Queue()
-        # # Creating a queue for the delayed packets waiting for rrep message
-        # wait_queue = Queue.Queue()
 
-        # self.wait_queue = wait_queue
         self.table = table
         self.broadcast_list = broadcast_list
 

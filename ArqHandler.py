@@ -24,7 +24,7 @@ ARQ_HANDLER_LOG = routing_logging.create_routing_log("routing.arq_handler.log", 
 
 # Main object which sends data and processes corresponding ACKs
 class ArqHandler:
-    def __init__(self, raw_transport):
+    def __init__(self, raw_transport, table):
         # Prepare ack dsr header object
         self.dsr_ack_header = Messages.DsrHeader(5)                      # 5 corresponds to ACK dsr header type
         self.dsr_ack_header.src_mac = raw_transport.node_mac
@@ -32,10 +32,26 @@ class ArqHandler:
         # Create a dictionary which will contain a map between a (msg.id + dest_address) pair and the ArqRoutine object
         self.msg_thread_map = {}
         self.raw_transport = raw_transport
+        self.table = table
 
-    # Start the ARQ routing for the given message and for each destination address in the dest_list
-    # Now, the messages from the Messages module which have the unique ID field are supported (RREQ and RREP)
+    # Start the ARQ send for the given message and for each destination address in the dest_list.
+    # For now, only the messages with unique ID field are supported.
     def arq_send(self, message, dsr_header, dest_mac_list):
+        for dst_address in dest_mac_list:
+            ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
+            # Add an entry to msg_thread_map and create a ArqRoutine thread
+            hash_str = hash(str(message.id) + dst_address)
+            lock.acquire()
+            self.msg_thread_map[hash_str] = ArqRoutine(hash_str, self.msg_thread_map,
+                                                       self.raw_transport, message, dsr_header, dst_address)
+            lock.release()
+            self.msg_thread_map[hash_str].start()
+
+    # Start the ARQ broadcast send for the given message.
+    # The message will be sent to ALL current neighbors of the node.
+    # For now, only the messages with unique ID field are supported.
+    def arq_broadcast_send(self, message, dsr_header):
+        dest_mac_list = self.table.get_neighbors()
         for dst_address in dest_mac_list:
             ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
             # Add an entry to msg_thread_map and create a ArqRoutine thread
@@ -124,4 +140,3 @@ class ArqRoutine(threading.Thread):
 
     def quit(self):
         self.running = False
-        # self._Thread__stop()
