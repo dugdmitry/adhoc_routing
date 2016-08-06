@@ -80,7 +80,7 @@ def get_l3_addresses_from_interface():
     return filter(None, addresses)
 
 
-# Define a static function which will return src and dst L3 address of the given packet.
+# Define a static function which will return src and dst L3 addresses of the given packet.
 # For now, only IPv4 and IPv6 protocols are supported.
 def get_l3_addresses_from_packet(packet):
     def get_data_from_ipv4_header(ipv4_packet):

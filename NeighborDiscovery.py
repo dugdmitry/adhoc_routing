@@ -182,22 +182,18 @@ class ListenNeighbors(threading.Thread):
     def add_neighbor_entry(self, neighbor):
         NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(neighbor.mac))
 
-        lock.acquire()
-        # self.table.add_entry(data.mac, data.mac, 1)
+        # lock.acquire()
         self.neighbors_list.update({neighbor.mac: neighbor})
-        lock.release()
-
-        return True
+        # lock.release()
 
     # Delete the neighbor entry from the shared dictionary
     def del_neighbor_entry(self, mac):
         NEIGHBOR_LOG.debug("Deleting the neighbor: %s", str(mac))
 
-        lock.acquire()
-        del self.neighbors_list[mac]
-        lock.release()
-
-        return True
+        if mac in self.neighbors_list:
+            # lock.acquire()
+            del self.neighbors_list[mac]
+            # lock.release()
 
     def quit(self):
         self.running = False

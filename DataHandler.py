@@ -28,13 +28,13 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
     def __init__(self, app_transport, raw_transport, neighbor_routine, table):
-        # Create an arq handler object
+        # Create an arq handler instance
         arq_handler = ArqHandler.ArqHandler(raw_transport)
 
-        # Creating a queue for receiving RREPs
-        rrep_queue = Queue.Queue()
-        # Creating a queue for the delayed packets waiting for rrep message
-        wait_queue = Queue.Queue()
+        # # Creating a queue for receiving RREPs
+        # rrep_queue = Queue.Queue()
+        # # Creating a queue for the delayed packets waiting for rrep message
+        # wait_queue = Queue.Queue()
         # Creating a queue for handling incoming RREQ and RREP packets from the raw_socket
         service_msg_queue = Queue.Queue()
         # Creating a deque list for keeping the received broadcast IDs
@@ -46,10 +46,10 @@ class DataHandler:
         reward_wait_list = dict()
 
         # Creating thread objects
-        self.app_handler_thread = AppHandler(wait_queue, raw_transport, table, reward_wait_list, broadcast_list)
+        self.app_handler_thread = AppHandler(arq_handler, raw_transport, table, reward_wait_list, broadcast_list)
 
-        self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(self.app_handler_thread.app_queue, wait_queue,
-                                                                        rrep_queue, arq_handler, table)
+        # self.path_discovery_thread = PathDiscovery.PathDiscoveryHandler(self.app_handler_thread.app_queue, wait_queue,
+        #                                                                 rrep_queue, arq_handler, table)
 
         self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler_thread.app_queue,
                                                                       service_msg_queue,
@@ -57,32 +57,36 @@ class DataHandler:
                                                                       app_transport, raw_transport, table,
                                                                       reward_wait_list, broadcast_list)
 
-        self.service_messages_handler_thread = ServiceMessagesHandler(table, raw_transport, arq_handler, rrep_queue,
+        self.service_messages_handler_thread = ServiceMessagesHandler(table, raw_transport, arq_handler,
+                                                                      self.app_handler_thread,
                                                                       service_msg_queue, reward_wait_list)
 
     # Starting the threads
     def run(self):
         self.app_handler_thread.start()
         self.incoming_traffic_handler_thread.start()
-        self.path_discovery_thread.start()
+        # self.path_discovery_thread.start()
         self.service_messages_handler_thread.start()
 
     def stop_threads(self):
         self.app_handler_thread.quit()
         self.incoming_traffic_handler_thread.quit()
-        self.path_discovery_thread.quit()
+        # self.path_discovery_thread.quit()
         self.service_messages_handler_thread.quit()
 
         DATA_LOG.info("Traffic handlers are stopped")
 
 
 class AppHandler(threading.Thread):
-    def __init__(self, wait_queue, raw_transport, table, reward_wait_list, broadcast_list):
+    def __init__(self, arq_handler, raw_transport, table, reward_wait_list, broadcast_list):
         super(AppHandler, self).__init__()
         self.running = True
-        # Create a queue for in coming app data
+        # Create a queue for incoming app data
         self.app_queue = Queue.Queue()
-        self.wait_queue = wait_queue
+        # # Creating a queue for the delayed packets waiting for rrep message
+        # wait_queue = Queue.Queue()
+
+        # self.wait_queue = wait_queue
         self.table = table
         self.broadcast_list = broadcast_list
 
@@ -90,6 +94,10 @@ class AppHandler(threading.Thread):
         self.node_mac = raw_transport.node_mac
 
         self.broadcast_mac = raw_transport.broadcast_mac
+
+        # Create and start path_discovery_handler for dealing with the packets with no next hop node
+        # TODO: remove table from the argument assignment
+        self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(self.app_queue, arq_handler, table)
 
         # # Define a structure for handling reward wait threads for given dst_ips.
         # # Format: {hash(dst_ip + next_hop_mac): thread_object}.
@@ -170,9 +178,9 @@ class AppHandler(threading.Thread):
 
                 DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
 
-                # ## Start PathDiscovery procedure ## #
-                # Put packet in wait_queue
-                self.wait_queue.put([src_ip, dst_ip, packet])
+                # ## Initiate PathDiscovery procedure for the given packet ## #
+                # self.wait_queue.put([src_ip, dst_ip, packet])
+                self.path_discovery_handler.run_path_discovery(src_ip, dst_ip, packet)
 
             # Else, the packet is unicast, and has the corresponding Entry.
             # Forward packet to the next hop. Start a thread wor waiting an ACK with reward.
@@ -219,6 +227,7 @@ class AppHandler(threading.Thread):
 
     def quit(self):
         self.running = False
+        self.path_discovery_handler.quit()
 
 
 # Thread for waiting for an incoming reward messages on the given dst_ip.
@@ -463,7 +472,8 @@ class IncomingTrafficHandler(threading.Thread):
 
 
 class ServiceMessagesHandler(threading.Thread):
-    def __init__(self, route_table, raw_transport, arq_handler, rrep_queue, service_msg_queue, reward_wait_list):
+    def __init__(self, route_table, raw_transport, arq_handler,
+                 app_handler_thread, service_msg_queue, reward_wait_list):
         super(ServiceMessagesHandler, self).__init__()
         # Check the MONITORING_MODE_FLAG.
         # If True - override the self.rreq_handler and self.rrep_handler methods for working in the monitoring mode.
@@ -478,8 +488,10 @@ class ServiceMessagesHandler(threading.Thread):
         self.broadcast_mac = raw_transport.broadcast_mac
         self.node_mac = raw_transport.node_mac
         self.service_msg_queue = service_msg_queue
-        self.rrep_queue = rrep_queue  # Store the received RREP in queue for further handling by Path_Discovery thread
-        
+        # Get path_discovery instance from the app_handler thread, to process incoming RREPs
+        # self.rrep_queue = rrep_queue
+        self.path_discovery_handler = app_handler_thread.path_discovery_handler
+
         self.rreq_ids = deque(maxlen=10000)  # Limit the max length of the list
         self.rrep_ids = deque(maxlen=10000)  # Limit the max length of the list
 
@@ -683,8 +695,8 @@ class ServiceMessagesHandler(threading.Thread):
 
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
 
-            # Put RREP in rrep_queue
-            self.rrep_queue.put(rrep.src_ip)
+            # Put RREP in the processing by path_discovery_handler
+            self.path_discovery_handler.process_rrep(rrep)
 
         else:
 
@@ -769,8 +781,9 @@ class ServiceMessagesHandler(threading.Thread):
 
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
 
-            # Put RREP in rrep_queue
-            self.rrep_queue.put(rrep.src_ip)
+            # Put RREP in the processing by path_discovery_handler
+            # self.rrep_queue.put(rrep.src_ip)
+            self.path_discovery_handler.process_rrep(rrep)
 
         # Otherwise, discard the RREP
         else:

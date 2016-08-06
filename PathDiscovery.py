@@ -8,6 +8,7 @@ Created on Oct 8, 2014
 import time
 import threading
 import Messages
+import Queue
 
 import routing_logging
 
@@ -16,52 +17,104 @@ lock = threading.Lock()
 PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery")
 
 
-class PathDiscoveryHandler(threading.Thread):
-    def __init__(self, app_queue, wait_queue, rrep_queue, arq_handler, table):
-        super(PathDiscoveryHandler, self).__init__()
-        self.wait_queue = wait_queue
+# class PathDiscoveryHandler(threading.Thread):
+#     def __init__(self, app_queue, wait_queue, rrep_queue, arq_handler, table):
+#         super(PathDiscoveryHandler, self).__init__()
+#         self.wait_queue = wait_queue
+#         self.rreq_list = {}
+#         self.rreq_thread_list = {}
+#         self.running = True
+#
+#         self.arq_handler = arq_handler
+#         self.table = table
+#
+#         # Starting a thread for handling incoming RREP requests
+#         self.rrep_handler_thread = RrepHandler(app_queue, rrep_queue, self.rreq_list, self.rreq_thread_list)
+#         self.rrep_handler_thread.start()
+#
+#     def run(self):
+#         while self.running:
+#             src_ip, dst_ip, raw_data = self.wait_queue.get()
+#             # Check if the dst_ip in the current list of requests
+#             if dst_ip in self.rreq_list:
+#
+#                 lock.acquire()
+#                 # self.rreq_list[dst_ip].append([src_ip, dst_ip, raw_data])
+#                 self.rreq_list[dst_ip].append(raw_data)
+#
+#                 PATH_DISCOVERY_LOG.info("Got DST_IP in rreq list: %s", dst_ip)
+#                 PATH_DISCOVERY_LOG.debug("RREQ LIST: %s", self.rreq_list[dst_ip])
+#
+#                 lock.release()
+#
+#             # If the request is new, start a new request thread, append new request to rreq_list
+#             else:
+#
+#                 PATH_DISCOVERY_LOG.info("No DST_IP in rreq list: %s", dst_ip)
+#
+#                 lock.acquire()
+#                 # self.rreq_list[dst_ip] = [[src_ip, dst_ip, raw_data]]
+#                 self.rreq_list[dst_ip] = [raw_data]
+#                 self.rreq_thread_list[dst_ip] = RreqRoutine(self.arq_handler, self.table,
+#                                                             self.rreq_list, self.rreq_thread_list, src_ip, dst_ip)
+#                 lock.release()
+#
+#                 self.rreq_thread_list[dst_ip].start()
+#
+#     def quit(self):
+#         self.running = False
+#         # Stopping RREP handler
+#         self.rrep_handler_thread.quit()
+#         for i in self.rreq_thread_list:
+#             self.rreq_thread_list[i].quit()
+
+
+class PathDiscoveryHandler:
+    def __init__(self, app_queue, arq_handler, table):
         self.rreq_list = {}
         self.rreq_thread_list = {}
-        self.running = True
 
         self.arq_handler = arq_handler
         self.table = table
 
+        # Creating a queue for receiving RREPs
+        self.rrep_queue = Queue.Queue()
+
         # Starting a thread for handling incoming RREP requests
-        self.rrep_handler_thread = RrepHandler(app_queue, rrep_queue, self.rreq_list, self.rreq_thread_list)
+        self.rrep_handler_thread = RrepHandler(app_queue, self.rrep_queue, self.rreq_list, self.rreq_thread_list)
         self.rrep_handler_thread.start()
 
-    def run(self):
-        while self.running:
-            src_ip, dst_ip, raw_data = self.wait_queue.get()
-            # Check if the dst_ip in the current list of requests
-            if dst_ip in self.rreq_list:
+    def run_path_discovery(self, src_ip, dst_ip, packet):
 
-                lock.acquire()
-                # self.rreq_list[dst_ip].append([src_ip, dst_ip, raw_data])
-                self.rreq_list[dst_ip].append(raw_data)
+        # Check if the dst_ip in the current list of requests
+        if dst_ip in self.rreq_list:
 
-                PATH_DISCOVERY_LOG.info("Got DST_IP in rreq list: %s", dst_ip)
-                PATH_DISCOVERY_LOG.debug("RREQ LIST: %s", self.rreq_list[dst_ip])
+            lock.acquire()
+            self.rreq_list[dst_ip].append(packet)
 
-                lock.release()
+            PATH_DISCOVERY_LOG.info("Got DST_IP in rreq list: %s", dst_ip)
+            PATH_DISCOVERY_LOG.debug("RREQ LIST: %s", self.rreq_list[dst_ip])
 
-            # If the request is new, start a new request thread, append new request to rreq_list
-            else:
+            lock.release()
 
-                PATH_DISCOVERY_LOG.info("No DST_IP in rreq list: %s", dst_ip)
+        # If the request is new, start a new request thread, append new request to rreq_list
+        else:
 
-                lock.acquire()
-                # self.rreq_list[dst_ip] = [[src_ip, dst_ip, raw_data]]
-                self.rreq_list[dst_ip] = [raw_data]
-                self.rreq_thread_list[dst_ip] = RreqRoutine(self.arq_handler, self.table,
-                                                            self.rreq_list, self.rreq_thread_list, src_ip, dst_ip)
-                lock.release()
+            PATH_DISCOVERY_LOG.info("No DST_IP in rreq list: %s", dst_ip)
 
-                self.rreq_thread_list[dst_ip].start()
+            lock.acquire()
+            self.rreq_list[dst_ip] = [packet]
+            self.rreq_thread_list[dst_ip] = RreqRoutine(self.arq_handler, self.table,
+                                                        self.rreq_list, self.rreq_thread_list, src_ip, dst_ip)
+            lock.release()
+
+            self.rreq_thread_list[dst_ip].start()
+
+    # Provides interface for handling RREP which have been received by IncomingTrafficHandler from the net interface
+    def process_rrep(self, rrep):
+        self.rrep_queue.put(rrep.src_ip)
 
     def quit(self):
-        self.running = False
         # Stopping RREP handler
         self.rrep_handler_thread.quit()
         for i in self.rreq_thread_list:
@@ -73,7 +126,6 @@ class RreqRoutine(threading.Thread):
     def __init__(self, arq_handler, table, rreq_list, rreq_thread_list, src_ip, dst_ip):
         super(RreqRoutine, self).__init__()
         self.running = True
-        # self.raw_transport = raw_transport
 
         self.arq_handler = arq_handler
         self.table = table
@@ -96,7 +148,6 @@ class RreqRoutine(threading.Thread):
                 time.sleep(self.interval)
             else:
                 # Max retries reached. Delete corresponding packets from rreq_list, stop the thread
-
                 PATH_DISCOVERY_LOG.info("Maximum retries reached!!! Deleting the thread...")
 
                 lock.acquire()
