@@ -9,6 +9,7 @@ import Messages
 import threading
 import time
 import pickle
+import Queue
 
 import routing_logging
 
@@ -27,13 +28,15 @@ class Neighbor:
 
 # Main wrapper class, which start two sub-threads for advertising and listening of Hello messages
 class NeighborDiscovery:
-    def __init__(self, node_mac, app_transport_obj, raw_transport_obj, table_obj, hello_msg_queue):
+    def __init__(self, app_transport_obj, raw_transport_obj, table_obj):
         # Create initial empty neighbors file
         f = open("neighbors_file", "w")
         f.close()
+        # Creating a queue for handling HELLO messages from the NeighborDiscovery
+        self.hello_msg_queue = Queue.Queue()
         # Create listening and advertising threads
-        self.listen_thread = ListenNeighbors(node_mac, table_obj, hello_msg_queue)
-        self.advertise_thread = AdvertiseNeighbor(node_mac, app_transport_obj, raw_transport_obj, table_obj)
+        self.listen_thread = ListenNeighbors(raw_transport_obj.node_mac, table_obj, self.hello_msg_queue)
+        self.advertise_thread = AdvertiseNeighbor(app_transport_obj, raw_transport_obj, table_obj)
 
     def run(self):
         self.listen_thread.start()
@@ -52,15 +55,15 @@ class NeighborDiscovery:
 # A thread which periodically broadcasts Hello messages to the network, so that the neighboring nodes could detect
 # the node's activity and register it as their neighbor
 class AdvertiseNeighbor(threading.Thread):
-    def __init__(self, node_mac, app_transport_obj, raw_transport_obj, table_obj):
+    def __init__(self, app_transport_obj, raw_transport_obj, table_obj):
         super(AdvertiseNeighbor, self).__init__()
 
         self.message = Messages.HelloMessage()
-        self.message.mac = node_mac
+        self.message.mac = raw_transport_obj.node_mac
         self.broadcast_mac = raw_transport_obj.broadcast_mac
         self.dsr_header = Messages.DsrHeader(1)                 # Type 1 corresponds to the HELLO message
-        self.dsr_header.src_mac = node_mac
-        self.dsr_header.tx_mac = node_mac
+        self.dsr_header.src_mac = raw_transport_obj.node_mac
+        self.dsr_header.tx_mac = raw_transport_obj.node_mac
 
         self.running = True
         self.broadcast_interval = 2
@@ -68,7 +71,7 @@ class AdvertiseNeighbor(threading.Thread):
         self.app_transport = app_transport_obj
         self.raw_transport = raw_transport_obj
         self.table_obj = table_obj
-        self.node_mac = node_mac
+        self.node_mac = raw_transport_obj.node_mac
 
     def run(self):
         while self.running:

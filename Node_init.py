@@ -188,13 +188,10 @@ class RoutingDaemon(Daemon):
         table = RouteTable.Table(node_mac)
         # Create a queue for in coming app data
         app_queue = Queue.Queue()
-        # Creating a queue for handling HELLO messages from the NeighborDiscovery
-        hello_msg_queue = Queue.Queue()
         # Create a Neighbor routine thread
-        neighbor_routine = NeighborDiscovery.NeighborDiscovery(node_mac, app_transport,
-                                                               raw_transport, table, hello_msg_queue)
-        # Create app_data handler thread
-        data_handler = DataHandler.DataHandler(app_transport, app_queue, hello_msg_queue, raw_transport, table)
+        neighbor_routine = NeighborDiscovery.NeighborDiscovery(app_transport, raw_transport, table)
+        # Create data handler thread to process all incoming and outgoing messages
+        data_handler = DataHandler.DataHandler(app_transport, app_queue, neighbor_routine, raw_transport, table)
         # Creating thread for live configuration / interaction with the running program
         uds_server = Transport.UdsServer(UDS_ADDRESS)
 

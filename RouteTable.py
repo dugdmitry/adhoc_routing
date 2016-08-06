@@ -28,7 +28,7 @@ class ValueEstimator:
             self.estimate_value = self.estimate_value_by_sample_average
             TABLE_LOG.info("An estimation method has been assigned: %s", est_method_id)
         else:
-            TABLE_LOG.error("INVALID ESTIMATION METHOD IS SPECIFIED!!!")
+            TABLE_LOG.warning("INVALID ESTIMATION METHOD IS SPECIFIED!!!")
             TABLE_LOG.info("Assigning the default estimation method...")
             self.estimate_value = self.estimate_value_by_sample_average
 
@@ -177,17 +177,6 @@ class Entry(dict):
     # Calculate and output the average of estimation values of itself
     def calc_avg_value(self):
         return sum(self.values()) / len(self)
-
-    # def __eq__(self, other):
-    #     return (self.dst_mac == other.dst_mac and
-    #             self.next_hop_mac == other.next_hop_mac and self.n_hops == other.n_hops)
-
-    # def __str__(self):
-    #     out_tuple = (str(self.dst_mac), str(self.next_hop_mac),
-    #                  str(self.n_hops), str(round((time() - self.last_activity), 2)))
-    #     out_string = "DST_MAC: %s, NEXT_HOP_MAC: %s, N_HOPS: %s, IDLE_TIME: %s" % out_tuple
-    #
-    #     return out_string
 
 
 # A class of route table. Contains a list and methods for manipulating the entries and its values, which correspond to

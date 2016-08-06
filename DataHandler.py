@@ -26,7 +26,7 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
-    def __init__(self, app_transport, app_queue, hello_msg_queue, raw_transport, table):
+    def __init__(self, app_transport, app_queue, neighbor_routine, raw_transport, table):
         # Create an arq handler object
         arq_handler = ArqHandler.ArqHandler(raw_transport)
 
@@ -51,12 +51,13 @@ class DataHandler:
         self.app_handler_thread = AppHandler(app_queue, wait_queue, raw_transport,
                                              table, reward_wait_list, broadcast_list)
 
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue, hello_msg_queue,
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_queue, service_msg_queue,
+                                                                      neighbor_routine.hello_msg_queue,
                                                                       app_transport, raw_transport, table,
                                                                       reward_wait_list, broadcast_list)
 
-        self.service_messages_handler_thread = ServiceMessagesHandler(table, app_transport, raw_transport, arq_handler,
-                                                                      rrep_queue, service_msg_queue, reward_wait_list)
+        self.service_messages_handler_thread = ServiceMessagesHandler(table, raw_transport, arq_handler, rrep_queue,
+                                                                      service_msg_queue, reward_wait_list)
 
     # Starting the threads
     def run(self):
@@ -89,7 +90,6 @@ class AppHandler(threading.Thread):
         self.broadcast_list = broadcast_list
         
         self.transport = raw_transport
-        # self.node_mac = table.node_mac
         self.node_mac = raw_transport.node_mac
 
         self.broadcast_mac = raw_transport.broadcast_mac
@@ -185,9 +185,6 @@ class AppHandler(threading.Thread):
             else:
 
                 DATA_LOG.debug("For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
-
-                # # next_hop_mac = entry.next_hop_mac
-                # next_hop_mac = self.table.get_next_hop_mac(src_ip, dst_ip)
 
                 # Create a unicast dsr header with proper values
                 dsr_header = self.create_dsr_unicast_header()
@@ -389,10 +386,6 @@ class IncomingTrafficHandler(threading.Thread):
 
             # If no entry is found, put the packet to the initial AppQueue
             if next_hop_mac is None:
-                # Get src_ip and dst_ip from the raw_data
-                # ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
-                # self.app_queue.put([ips[0], ips[1], raw_data])
-                # ips = self.app_transport.get_L3_addresses_from_packet(raw_data)
                 self.app_queue.put([src_ip, dst_ip, raw_data])
 
             # Else, forward the packet to the next_hop. Start a reward wait thread, if necessary.
@@ -475,8 +468,7 @@ class IncomingTrafficHandler(threading.Thread):
 
 
 class ServiceMessagesHandler(threading.Thread):
-    def __init__(self, route_table, app_transport, raw_transport,
-                 arq_handler, rrep_queue, service_msg_queue, reward_wait_list):
+    def __init__(self, route_table, raw_transport, arq_handler, rrep_queue, service_msg_queue, reward_wait_list):
         super(ServiceMessagesHandler, self).__init__()
         # Check the MONITORING_MODE_FLAG.
         # If True - override the self.rreq_handler and self.rrep_handler methods for working in the monitoring mode.
@@ -486,7 +478,6 @@ class ServiceMessagesHandler(threading.Thread):
 
         self.table = route_table
         self.raw_transport = raw_transport
-        self.app_transport = app_transport
         self.arq_handler = arq_handler
 
         self.broadcast_mac = raw_transport.broadcast_mac
