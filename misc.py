@@ -2,6 +2,9 @@
 import logging
 from random import randint
 
+import Transport
+
+
 class Resource:
     id_counter = 0
 
@@ -88,7 +91,8 @@ def create_obj():
 for i in range(10):
     create_obj()
 
-
+# Check method in VirtualTransport
+print Transport.get_l3_addresses_from_interface()
 
 
 

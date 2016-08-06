@@ -22,7 +22,7 @@ TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "tra
 
 # Syscall ids for managing network interfaces via ioctl
 TUNSETIFF = 0x400454ca
-IFF_TUN   = 0x0001
+IFF_TUN = 0x0001
 SIOCSIFADDR = 0x8916
 SIOCSIFNETMASK = 0x891C
 SIOCSIFMTU = 0x8922
@@ -34,6 +34,50 @@ SIOCGIFADDR = 0x8915
 # IDs of supported L3 protocols, going through virtual interface
 IP4_ID = 0x0800
 IP6_ID = 0x86DD
+
+
+# Define a static function which will return a list of ip addresses assigned to the virtual interface (in a form of:
+# [<ipv4 address>, <ipv6 address1>,  <ipv6 address2>,  <ipv6 addressN>])
+def get_l3_addresses_from_interface():
+    def get_ipv4_address():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            ipv4_addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
+        except IOError:
+            # No IPv4 address was assigned"
+            TRANSPORT_LOG.debug("No IPv4 address assigned!")
+            return None
+
+        return socket.inet_ntoa(ipv4_addr)
+
+    def get_ipv6_address():
+        ipv6_addresses = list()
+        f = open("/proc/net/if_inet6", "r")
+        data = f.read().split("\n")[:-1]
+
+        for row in data:
+            if row.split(" ")[-1] == VIRT_IFACE_NAME:
+                ipv6_addresses.append(row.split(" ")[0])
+
+        if ipv6_addresses:
+            output = []
+            for ipv6_addr in ipv6_addresses:
+                ipv6_addr = ":".join([ipv6_addr[i:i + 4] for i in range(0, len(ipv6_addr), 4)])
+                ipv6_addr = socket.inet_pton(socket.AF_INET6, ipv6_addr)
+                output.append(socket.inet_ntop(socket.AF_INET6, ipv6_addr))
+            return output
+        else:
+            # No IPv6 addresses were assigned"
+            TRANSPORT_LOG.debug("No IPv6 address assigned!")
+
+            return [None]
+
+    addresses = list()
+    addresses.append(get_ipv4_address())
+    for addr in get_ipv6_address():
+        addresses.append(addr)
+
+    return filter(None, addresses)
 
 
 class UdsClient:
@@ -127,48 +171,84 @@ class VirtualTransport:
         ifreq = struct.pack('16sH', iface, IFF_UP)
         ioctl(sock, SIOCSIFFLAGS, ifreq)
     
-    # Returns a list of ip addresses assigned to the virtual interface (in a form of:
-    # [<ipv4 address>, <ipv6 address1>,  <ipv6 address2>,  <ipv6 addressN>])
-    def get_L3_addresses_from_interface(self):
-        addresses = list()
-        addresses.append(self.get_ipv4_address())
-        for addr in self.get_ipv6_address():
-            addresses.append(addr)
+    # # Returns a list of ip addresses assigned to the virtual interface (in a form of:
+    # # [<ipv4 address>, <ipv6 address1>,  <ipv6 address2>,  <ipv6 addressN>])
+    # @staticmethod
+    # def get_l3_addresses_from_interface():
+    #     def get_ipv4_address():
+    #         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #         try:
+    #             addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
+    #         except IOError:
+    #             # No IPv4 address was assigned"
+    #             TRANSPORT_LOG.debug("No IPv4 address assigned!")
+    #             return None
+    #
+    #         return socket.inet_ntoa(addr)
+    #
+    #     def get_ipv6_address():
+    #         addresses = []
+    #         f = open("/proc/net/if_inet6", "r")
+    #         data = f.read().split("\n")[:-1]
+    #
+    #         for row in data:
+    #             if row.split(" ")[-1] == VIRT_IFACE_NAME:
+    #                 addresses.append(row.split(" ")[0])
+    #
+    #         if addresses != []:
+    #             output = []
+    #             for addr in addresses:
+    #                 addr = ":".join([addr[i:i + 4] for i in range(0, len(addr), 4)])
+    #                 addr = socket.inet_pton(socket.AF_INET6, addr)
+    #                 output.append(socket.inet_ntop(socket.AF_INET6, addr))
+    #             return output
+    #         else:
+    #             # No IPv6 addresses were assigned"
+    #             TRANSPORT_LOG.debug("No IPv6 address assigned!")
+    #
+    #             return [None]
+    #
+    #     addresses = list()
+    #     addresses.append(get_ipv4_address())
+    #     for addr in get_ipv6_address():
+    #         addresses.append(addr)
+    #
+    #     return filter(None, addresses)
 
-        return filter(None, addresses)
-        
-    def get_ipv4_address(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
-        except IOError:
-            # No IPv4 address was assigned"
-            TRANSPORT_LOG.debug("No IPv4 address assigned!")
-            return None
+    # @staticmethod
+    # def get_ipv4_address():
+    #     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     try:
+    #         addr = ioctl(s.fileno(), SIOCGIFADDR, struct.pack('256s', VIRT_IFACE_NAME[:15]))[20:24]
+    #     except IOError:
+    #         # No IPv4 address was assigned"
+    #         TRANSPORT_LOG.debug("No IPv4 address assigned!")
+    #         return None
+    #
+    #     return socket.inet_ntoa(addr)
 
-        return socket.inet_ntoa(addr)
-    
-    def get_ipv6_address(self):
-        addresses = []
-        f = open("/proc/net/if_inet6", "r")
-        data = f.read().split("\n")[:-1]
-
-        for row in data:
-            if row.split(" ")[-1] == VIRT_IFACE_NAME:
-                addresses.append(row.split(" ")[0])
-            
-        if addresses != []:
-            output = []
-            for addr in addresses:
-                addr = ":".join([addr[i:i+4] for i in range(0, len(addr), 4)])
-                addr = socket.inet_pton(socket.AF_INET6, addr)
-                output.append(socket.inet_ntop(socket.AF_INET6, addr))
-            return output
-        else:
-            # No IPv6 addresses were assigned"
-            TRANSPORT_LOG.debug("No IPv6 address assigned!")
-
-            return [None]
+    # @staticmethod
+    # def get_ipv6_address(self):
+    #     addresses = []
+    #     f = open("/proc/net/if_inet6", "r")
+    #     data = f.read().split("\n")[:-1]
+    #
+    #     for row in data:
+    #         if row.split(" ")[-1] == VIRT_IFACE_NAME:
+    #             addresses.append(row.split(" ")[0])
+    #
+    #     if addresses != []:
+    #         output = []
+    #         for addr in addresses:
+    #             addr = ":".join([addr[i:i+4] for i in range(0, len(addr), 4)])
+    #             addr = socket.inet_pton(socket.AF_INET6, addr)
+    #             output.append(socket.inet_ntop(socket.AF_INET6, addr))
+    #         return output
+    #     else:
+    #         # No IPv6 addresses were assigned"
+    #         TRANSPORT_LOG.debug("No IPv6 address assigned!")
+    #
+    #         return [None]
         
     def get_L3_addresses_from_packet(self, packet):
         l3_id = struct.unpack("!H", packet[2:4])[0]

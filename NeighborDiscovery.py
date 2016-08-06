@@ -6,6 +6,7 @@ Created on Feb 23, 2015
 """
 
 import Messages
+import Transport
 import threading
 import time
 import pickle
@@ -28,7 +29,7 @@ class Neighbor:
 
 # Main wrapper class, which start two sub-threads for advertising and listening of Hello messages
 class NeighborDiscovery:
-    def __init__(self, app_transport_obj, raw_transport_obj, table_obj):
+    def __init__(self, raw_transport_obj, table_obj):
         # Create initial empty neighbors file
         f = open("neighbors_file", "w")
         f.close()
@@ -36,7 +37,7 @@ class NeighborDiscovery:
         self.hello_msg_queue = Queue.Queue()
         # Create listening and advertising threads
         self.listen_thread = ListenNeighbors(raw_transport_obj.node_mac, table_obj, self.hello_msg_queue)
-        self.advertise_thread = AdvertiseNeighbor(app_transport_obj, raw_transport_obj, table_obj)
+        self.advertise_thread = AdvertiseNeighbor(raw_transport_obj, table_obj)
 
     def run(self):
         self.listen_thread.start()
@@ -52,7 +53,7 @@ class NeighborDiscovery:
 # A thread which periodically broadcasts Hello messages to the network, so that the neighboring nodes could detect
 # the node's activity and register it as their neighbor
 class AdvertiseNeighbor(threading.Thread):
-    def __init__(self, app_transport_obj, raw_transport_obj, table_obj):
+    def __init__(self, raw_transport_obj, table_obj):
         super(AdvertiseNeighbor, self).__init__()
 
         self.message = Messages.HelloMessage()
@@ -65,7 +66,6 @@ class AdvertiseNeighbor(threading.Thread):
         self.running = True
         self.broadcast_interval = 2
 
-        self.app_transport = app_transport_obj
         self.raw_transport = raw_transport_obj
         self.table_obj = table_obj
         self.node_mac = raw_transport_obj.node_mac
@@ -84,7 +84,7 @@ class AdvertiseNeighbor(threading.Thread):
 
     def send_raw_hello(self):
         # Try to get L3 ip address (ipv4 or ipv6) assigned to the node, if there are such ones
-        node_ips = self.app_transport.get_L3_addresses_from_interface()
+        node_ips = Transport.get_l3_addresses_from_interface()
         # Update entries in RouteTable
         self.update_ips_in_route_table(node_ips)
 

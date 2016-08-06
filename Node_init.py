@@ -186,10 +186,8 @@ class RoutingDaemon(Daemon):
         raw_transport = Transport.RawTransport(DEV, node_mac, topology_neighbors)
         # Create a RouteTable object
         table = RouteTable.Table(node_mac)
-        # # Create a queue for in coming app data
-        # app_queue = Queue.Queue()
         # Create a Neighbor routine thread
-        neighbor_routine = NeighborDiscovery.NeighborDiscovery(app_transport, raw_transport, table)
+        neighbor_routine = NeighborDiscovery.NeighborDiscovery(raw_transport, table)
         # Create data handler thread to process all incoming and outgoing messages
         data_handler = DataHandler.DataHandler(app_transport, neighbor_routine, raw_transport, table)
         # Creating thread for live configuration / interaction with the running program
@@ -206,7 +204,6 @@ class RoutingDaemon(Daemon):
             while True:
                 packet = app_transport.recv_from_app()
                 data_handler.app_handler_thread.process_packet(packet)
-                # app_queue.put(packet)
 
         # Catch SIGINT signal, raised by the daemon
         except KeyboardInterrupt:
