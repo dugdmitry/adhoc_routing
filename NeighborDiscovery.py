@@ -2,7 +2,7 @@
 """
 Created on Feb 23, 2015
 
-@author: Dmitrii
+@author: Dmitrii Dugaev
 """
 
 import Messages
@@ -51,7 +51,8 @@ class NeighborDiscovery:
 
 
 # A thread which periodically broadcasts Hello messages to the network, so that the neighboring nodes could detect
-# the node's activity and register it as their neighbor
+# the node's activity and register it as their neighbor.
+# Also, this thread is used for periodically printing out the entries of the route table.
 class AdvertiseNeighbor(threading.Thread):
     def __init__(self, raw_transport_obj, table_obj):
         super(AdvertiseNeighbor, self).__init__()
@@ -72,7 +73,10 @@ class AdvertiseNeighbor(threading.Thread):
 
     def run(self):
         while self.running:
+            # Sending the Hello message
             self.send_raw_hello()
+            # Printing out the route table entries
+            self.table_obj.print_table()
             time.sleep(self.broadcast_interval)
 
     # Update node's own ips in the route table

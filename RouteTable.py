@@ -8,7 +8,6 @@ Created on Aug 1, 2016
 import threading
 import random
 import copy
-import time
 
 import routing_logging
 
@@ -184,6 +183,8 @@ class Entry(dict):
 # different src-dst pairs (routes).
 class Table:
     def __init__(self, node_mac):
+        # Define a filename to write the table to
+        self.table_filename = "table.txt"
 
         self.node_mac = node_mac
 
@@ -200,9 +201,9 @@ class Table:
         # Create RL helper object, to handle the selection of the actions
         self.action_selector = ActionSelector()
 
-        # Create and start a thread for periodically printing out the route table contents
-        self.print_table_thread = PrintTableThread(self.entries_list)
-        self.print_table_thread.start()
+        # # Create and start a thread for periodically printing out the route table contents
+        # self.print_table_thread = PrintTableThread(self.entries_list)
+        # self.print_table_thread.start()
 
     # This method selects a next hop for the packet with the given dst_ip.
     # The selection is being made from the current estimated values of the neighbors mac addresses,
@@ -253,33 +254,50 @@ class Table:
         else:
             return None
 
+    # Print out the contents of the route table to a specified file
+    def print_table(self):
+        current_entries_list = copy.deepcopy(self.entries_list)
+        f = open(self.table_filename, "w")
+        f.write("-" * 90 + "\n")
 
-# A thread which periodically prints out or writes the content of route entries list to a specified file.
-class PrintTableThread(threading.Thread):
-    def __init__(self, entries_list):
-        super(PrintTableThread, self).__init__()
-        self.running = True
-        self.entries_list = entries_list
-        # Update interval, in seconds
-        self.update_interval = 5
-        # Define a filename to write the table to
-        self.table_filename = "table.txt"
+        for dst_ip in current_entries_list:
+            f.write("Towards destination IP: %s \n" % dst_ip)
+            f.write("<Next_hop_MAC> \t\t <Value>\n")
+            for mac in current_entries_list[dst_ip]:
+                string = "%s \t %s \n"
+                values = (mac, current_entries_list[dst_ip][mac])
+                f.write(string % values)
+            f.write("\n")
+        f.write("-" * 90 + "\n")
+        f.close()
 
-    def run(self):
-        while self.running:
-            current_entries_list = copy.deepcopy(self.entries_list)
-            f = open(self.table_filename, "w")
-            f.write("-" * 90 + "\n")
 
-            for dst_ip in current_entries_list:
-                f.write("Towards destination IP: %s \n" % dst_ip)
-                f.write("<Next_hop_MAC> \t\t <Value>\n")
-                for mac in current_entries_list[dst_ip]:
-                    string = "%s \t %s \n"
-                    values = (mac, current_entries_list[dst_ip][mac])
-                    f.write(string % values)
-                f.write("\n")
-            f.write("-" * 90 + "\n")
-            f.close()
-
-            time.sleep(self.update_interval)
+# # A thread which periodically prints out or writes the content of route entries list to a specified file.
+# class PrintTableThread(threading.Thread):
+#     def __init__(self, entries_list):
+#         super(PrintTableThread, self).__init__()
+#         self.running = True
+#         self.entries_list = entries_list
+#         # Update interval, in seconds
+#         self.update_interval = 5
+#         # Define a filename to write the table to
+#         self.table_filename = "table.txt"
+#
+#     def run(self):
+#         while self.running:
+#             current_entries_list = copy.deepcopy(self.entries_list)
+#             f = open(self.table_filename, "w")
+#             f.write("-" * 90 + "\n")
+#
+#             for dst_ip in current_entries_list:
+#                 f.write("Towards destination IP: %s \n" % dst_ip)
+#                 f.write("<Next_hop_MAC> \t\t <Value>\n")
+#                 for mac in current_entries_list[dst_ip]:
+#                     string = "%s \t %s \n"
+#                     values = (mac, current_entries_list[dst_ip][mac])
+#                     f.write(string % values)
+#                 f.write("\n")
+#             f.write("-" * 90 + "\n")
+#             f.close()
+#
+#             time.sleep(self.update_interval)

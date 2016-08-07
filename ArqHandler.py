@@ -2,7 +2,7 @@
 """
 Created on Jun 8, 2016
 
-@author: Dmitrii
+@author: Dmitrii Dugaev
 """
 
 import threading

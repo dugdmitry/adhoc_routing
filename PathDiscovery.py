@@ -2,7 +2,7 @@
 """
 Created on Oct 8, 2014
 
-@author: Dmitrii
+@author: Dmitrii Dugaev
 """
 
 import time
