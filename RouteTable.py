@@ -270,34 +270,3 @@ class Table:
             f.write("\n")
         f.write("-" * 90 + "\n")
         f.close()
-
-
-# # A thread which periodically prints out or writes the content of route entries list to a specified file.
-# class PrintTableThread(threading.Thread):
-#     def __init__(self, entries_list):
-#         super(PrintTableThread, self).__init__()
-#         self.running = True
-#         self.entries_list = entries_list
-#         # Update interval, in seconds
-#         self.update_interval = 5
-#         # Define a filename to write the table to
-#         self.table_filename = "table.txt"
-#
-#     def run(self):
-#         while self.running:
-#             current_entries_list = copy.deepcopy(self.entries_list)
-#             f = open(self.table_filename, "w")
-#             f.write("-" * 90 + "\n")
-#
-#             for dst_ip in current_entries_list:
-#                 f.write("Towards destination IP: %s \n" % dst_ip)
-#                 f.write("<Next_hop_MAC> \t\t <Value>\n")
-#                 for mac in current_entries_list[dst_ip]:
-#                     string = "%s \t %s \n"
-#                     values = (mac, current_entries_list[dst_ip][mac])
-#                     f.write(string % values)
-#                 f.write("\n")
-#             f.write("-" * 90 + "\n")
-#             f.close()
-#
-#             time.sleep(self.update_interval)

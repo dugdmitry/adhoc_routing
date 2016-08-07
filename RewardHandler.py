@@ -12,6 +12,8 @@ import time
 
 import Messages
 
+lock = threading.Lock()
+
 """
 This module is responsible for a reward distribution between the nodes. It means both reception and transmission of
 the generated reward values, depending on current state of RouteTable entries towards a given destination L3 address.
@@ -25,6 +27,33 @@ The second is RewardSendHandler - it generates and sends back the reward to a so
 "hold on" time interval, which is needed to control a number of generated reward messages for some number of
 the received packets with the same dst_ip address.
 """
+
+
+# A class which handles a reward reception for each sent packet.
+class RewardWaitHandler:
+    def __init__(self, table):
+        self.table = table
+        # Define a structure for handling reward wait threads for given dst_ips.
+        # Format: {hash(dst_ip + next_hop_mac): thread_object}.
+        # A reward value is being forwarded to the thread via a queue_object.
+        self.reward_wait_list = dict()
+
+    # Check if the waiting process for such dst_ip and next_hop_mac has already been initiated or not.
+    # If yes - do nothing. Else - start the reward waiting thread.
+    def wait_for_reward(self, dst_ip, mac):
+        hash_value = hash(dst_ip + mac)
+        if hash_value not in self.reward_wait_list:
+            reward_wait_thread = RewardWaitThread(dst_ip, mac, self.table, self.reward_wait_list)
+            # lock.acquire()
+            self.reward_wait_list.update({hash_value: reward_wait_thread})
+            # lock.release()
+            # Start the thread
+            reward_wait_thread.start()
+
+    # Set a reward value to a specified entry, based on msg_hash
+    def set_reward(self, msg_hash, reward_value):
+        if msg_hash in self.reward_wait_list:
+            self.reward_wait_list[msg_hash].reward_wait_queue.put(reward_value)
 
 
 # Thread for waiting for an incoming reward messages on the given dst_ip.
@@ -54,8 +83,28 @@ class RewardWaitThread(threading.Thread):
             del self.reward_wait_list[hash(self.dst_ip + self.mac)]
             # lock.release()
 
-    def set_reward(self, reward):
-        self.reward_wait_queue.put(reward)
+    # def set_reward(self, reward):
+    #     self.reward_wait_queue.put(reward)
+
+
+# A class which handles a reward generation and sending back to the sender node.
+class RewardSendHandler:
+    def __init__(self, table, raw_transport):
+        self.table = table
+        self.raw_transport = raw_transport
+        # Define a structure for handling reward send threads for given dst_ips.
+        # Format: {hash(dst_ip + mac): RewardSendThread}.
+        self.reward_send_list = dict()
+
+    # Send the reward back to the sender node after some "hold on" time interval.
+    # This timeout is needed to control a number of generated reward messages for some number of
+    # the received packets with the same dst_ip.
+    def send_reward(self, dst_ip, mac):
+        hash_value = hash(dst_ip + mac)
+        if hash_value not in self.reward_send_list:
+            reward_send_thread = RewardSendThread(dst_ip, mac, self.table, self.raw_transport, self.reward_send_list)
+            self.reward_send_list.update({hash_value: reward_send_thread})
+            reward_send_thread.start()
 
 
 # Thread for generating and sending back a reward message upon receiving a packet with a corresponding dst_ip
@@ -92,6 +141,3 @@ class RewardSendThread(threading.Thread):
         # lock.acquire()
         del self.reward_send_list[hash(self.dst_ip + self.mac)]
         # lock.release()
-
-
-
