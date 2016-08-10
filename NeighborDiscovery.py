@@ -14,8 +14,6 @@ from socket import error as sock_error
 
 import routing_logging
 
-lock = threading.Lock()
-
 NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery")
 
 
@@ -38,11 +36,9 @@ class NeighborDiscovery:
         self.advertise_thread = AdvertiseNeighbor(raw_transport_obj, table_obj)
 
     def run(self):
-        # self.listen_thread.start()
         self.advertise_thread.start()
 
     def stop_threads(self):
-        # self.listen_thread.quit()
         self.advertise_thread.quit()
 
         NEIGHBOR_LOG.info("NeighborDiscovery threads are stopped")
@@ -199,15 +195,10 @@ class ListenNeighbors:
     def add_neighbor_entry(self, neighbor):
         NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(neighbor.mac))
 
-        # lock.acquire()
         self.neighbors_list.update({neighbor.mac: neighbor})
-        # lock.release()
 
     # Delete the neighbor entry from the shared dictionary
     def del_neighbor_entry(self, mac):
         NEIGHBOR_LOG.debug("Deleting the neighbor: %s", str(mac))
-
         if mac in self.neighbors_list:
-            # lock.acquire()
             del self.neighbors_list[mac]
-            # lock.release()
