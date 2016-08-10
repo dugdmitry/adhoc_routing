@@ -7,7 +7,6 @@ Created on Aug 6, 2016
 
 import threading
 import Queue
-import pickle
 import time
 
 import Messages
@@ -118,10 +117,10 @@ class RewardSendThread(threading.Thread):
         self.table = table
         self.raw_transport = raw_transport
         self.reward_send_list = reward_send_list
-        # Create a reward message object
-        self.reward_message = Messages.RewardMessage()
-        # Create a dsr_header object
-        self.dsr_header = Messages.DsrHeader(6)         # Type 6 corresponds to Reward Message
+        # # Create a dsr_header object
+        # self.dsr_header = Messages.DsrHeader(6)         # Type 6 corresponds to Reward Message
+        # # Create Reward dsr_message
+        # self.dsr_reward_message = Messages.RewardMessage(hash(self.dst_ip + self.node_mac))
         # A time interval the thread waits for, ere generating and sending back the RewardMessage.
         # This timeout is needed to control a number of generated reward messages for some number of
         # the received packets with the same dst_ip.
@@ -132,11 +131,13 @@ class RewardSendThread(threading.Thread):
         time.sleep(self.hold_on_timeout)
         # Calculate its own average value of the estimated reward towards the given dst_ip
         avg_value = self.table.get_avg_value(self.dst_ip)
-        # Assign a reward to the reward message
-        self.reward_message.reward_value = avg_value
-        self.reward_message.msg_hash = hash(self.dst_ip + self.node_mac)
+        # Create Reward dsr_message and assign the reward value
+        dsr_reward_message = Messages.RewardMessage(avg_value, hash(self.dst_ip + self.node_mac))
+        # # Assign a reward to the reward message
+        # self.dsr_reward_message.reward_value = avg_value
+        # self.dsr_reward_message.msg_hash = hash(self.dst_ip + self.node_mac)
         # Send it back to the node which has sent the packet
-        self.raw_transport.send_raw_frame(self.mac, self.dsr_header, pickle.dumps(self.reward_message))
+        self.raw_transport.send_raw_frame(self.mac, dsr_reward_message, "")
         # Delete its own entry from the reward_send_list
         # lock.acquire()
         del self.reward_send_list[hash(self.dst_ip + self.mac)]

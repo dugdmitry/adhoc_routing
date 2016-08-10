@@ -9,8 +9,9 @@ import Messages
 import Transport
 import threading
 import time
-import pickle
 import Queue
+from socket import inet_aton
+from socket import error as sock_error
 
 import routing_logging
 
@@ -22,8 +23,10 @@ NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.lo
 # Describes a neighbor and its properties
 class Neighbor:
     def __init__(self):
-        self.l3_addresses = []
-        self.mac = ""
+        self.l3_addresses = list()
+        # self.ipv4_address = str()
+        # self.ipv6_addresses = list()
+        self.mac = str()
         self.last_activity = time.time()
 
 
@@ -58,11 +61,11 @@ class AdvertiseNeighbor(threading.Thread):
         super(AdvertiseNeighbor, self).__init__()
 
         self.message = Messages.HelloMessage()
-        self.message.mac = raw_transport_obj.node_mac
+        # self.message.mac = raw_transport_obj.node_mac
         self.broadcast_mac = raw_transport_obj.broadcast_mac
-        self.dsr_header = Messages.DsrHeader(1)                 # Type 1 corresponds to the HELLO message
-        self.dsr_header.src_mac = raw_transport_obj.node_mac
-        self.dsr_header.tx_mac = raw_transport_obj.node_mac
+        # self.dsr_header = Messages.DsrHeader(1)                 # Type 1 corresponds to the HELLO message
+        # self.dsr_header.src_mac = raw_transport_obj.node_mac
+        # self.dsr_header.tx_mac = raw_transport_obj.node_mac
 
         self.running = True
         self.broadcast_interval = 2
@@ -83,7 +86,7 @@ class AdvertiseNeighbor(threading.Thread):
     def update_ips_in_route_table(self, node_ips):
         for ip in node_ips:
             if ip not in self.table_obj.current_node_ips:
-                self.table_obj.update_entry(ip, self.node_mac, 1000)
+                self.table_obj.update_entry(ip, self.node_mac, 100)
         self.table_obj.current_node_ips = node_ips
 
     def send_raw_hello(self):
@@ -92,12 +95,31 @@ class AdvertiseNeighbor(threading.Thread):
         # Update entries in RouteTable
         self.update_ips_in_route_table(node_ips)
 
-        self.message.l3_addresses = node_ips
+        if node_ips:
+            # Check if the node has IPv4 address assigned
+            try:
+                inet_aton(node_ips[0])
+                self.message.ipv4_count = 1
+                self.message.ipv4_address = node_ips[0]
+                # Remove the ipv4 address from list
+                node_ips.pop(0)
+            except sock_error:
+                self.message.ipv4_count = 0
+            finally:
+                # If there are some IPv6 addresses in the list -> write them as well
+                self.message.ipv6_count = len(node_ips)
+                for ipv6_addr in node_ips:
+                    self.message.ipv6_addresses.append(ipv6_addr)
+        else:
+            self.message.ipv4_count = 0
+            self.message.ipv6_count = 0
+
+        # self.message.l3_addresses = node_ips
 
         NEIGHBOR_LOG.debug("Sending HELLO message:\n %s", self.message)
 
-        self.raw_transport.send_raw_frame(self.broadcast_mac, self.dsr_header, pickle.dumps(self.message))
-        self.message.retries += 1
+        self.raw_transport.send_raw_frame(self.broadcast_mac, self.message, "")
+        self.message.tx_count += 1
 
     def quit(self):
         self.running = False
@@ -120,36 +142,47 @@ class ListenNeighbors(threading.Thread):
 
     def run(self):
         while self.running:
-            data = self.hello_msg_queue.get()
-            self.process_neighbor(pickle.loads(data))
+            src_mac, dsr_hello_message = self.hello_msg_queue.get()
+            # self.process_neighbor(pickle.loads(data))
+            self.process_neighbor(src_mac, dsr_hello_message)
 
-    def process_neighbor(self, data):
+    def process_neighbor(self, src_mac, dsr_hello_message):
+        l3_addresses_from_message = []
+        if dsr_hello_message.ipv4_count:
+            l3_addresses_from_message.append(dsr_hello_message.ipv4_address)
+
+        if dsr_hello_message.ipv6_count:
+            for ipv6 in dsr_hello_message.ipv6_addresses:
+                l3_addresses_from_message.append(ipv6)
+
         # Check if the neighbor was not advertising itself for too long
         if (time.time() - self.last_expiry_check) > self.expiry_interval:
             self.check_expired_neighbors()
             self.last_expiry_check = time.time()
-        if data.mac == self.node_mac:
+        if src_mac == self.node_mac:
             NEIGHBOR_LOG.warning("Neighbor has the same mac address as mine! %s", self.node_mac)
             return False
-        if data.mac not in self.neighbors_list:
+        if src_mac not in self.neighbors_list:
             neighbor = Neighbor()
-            neighbor.l3_addresses = data.l3_addresses
-            neighbor.mac = data.mac
-            self.neighbors_list[data.mac] = neighbor
+
+            neighbor.l3_addresses = l3_addresses_from_message
+            neighbor.mac = src_mac
+
+            self.neighbors_list[src_mac] = neighbor
             # Adding an entry to the neighbors list
             self.add_neighbor_entry(neighbor)
             # Add the entries for the received L3 ip addresses to the RouteTable
-            for ip in data.l3_addresses:
-                self.table.update_entry(ip, data.mac, 100)
+            for ip in neighbor.l3_addresses:
+                self.table.update_entry(ip, src_mac, 50)
 
         else:
-            if self.neighbors_list[data.mac].l3_addresses != data.l3_addresses:
-                self.neighbors_list[data.mac].l3_addresses = data.l3_addresses
+            if self.neighbors_list[src_mac].l3_addresses != l3_addresses_from_message:
+                self.neighbors_list[src_mac].l3_addresses = l3_addresses_from_message
                 # Add the entries for the received L3 ip addresses to the RouteTable
-                for ip in data.l3_addresses:
-                    self.table.update_entry(ip, data.mac, 100)
+                for ip in l3_addresses_from_message:
+                    self.table.update_entry(ip, src_mac, 50)
 
-            self.neighbors_list[data.mac].last_activity = time.time()
+            self.neighbors_list[src_mac].last_activity = time.time()
 
         # Update the file with current list of neighbors' ip addresses
         self.update_neighbors_file()

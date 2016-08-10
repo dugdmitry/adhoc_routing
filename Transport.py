@@ -16,7 +16,6 @@ import routing_logging
 import Messages
 from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
 
-
 TRANSPORT_LOG = routing_logging.create_routing_log("routing.transport.log", "transport")
 
 
@@ -125,6 +124,7 @@ def get_l3_addresses_from_packet(packet):
     l3_id = struct.unpack("!H", packet[2:4])[0]
 
     TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
+    # print binascii.hexlify(packet[2:4])
 
     if l3_id == int(IP4_ID):
         addresses = get_data_from_ipv4_header(packet)
@@ -134,7 +134,7 @@ def get_l3_addresses_from_packet(packet):
         return addresses
     else:
         # The packet has UNSUPPORTED L3 protocol, drop it
-        TRANSPORT_LOG.warning("The packet has UNSUPPORTED L3 protocol, dropping the packet")
+        TRANSPORT_LOG.error("The packet has UNSUPPORTED L3 protocol, dropping the packet")
         return None
 
 
@@ -170,16 +170,15 @@ class UdsServer(threading.Thread):
             data = self.sock.recvfrom(4096)[0]
             _id, addr = data.split("-")
             if _id == "ipv4":
-                self.setIpAddr4(addr)
+                self.set_ip_addr4(addr)
 
             elif _id == "ipv6":
-                self.setIpAddr6(addr)
+                self.set_ip_addr6(addr)
                 
             else:
-                print "This should never happen."
-                TRANSPORT_LOG.warning("This should never happen.")
+                TRANSPORT_LOG.error("Unsupported command via UDS! This should never happen!")
 
-    def setIpAddr4(self, ip4):
+    def set_ip_addr4(self, ip4):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         bin_ip = socket.inet_aton(ip4)
         ifreq = struct.pack('16sH2s4s8s', self.iface, socket.AF_INET, '\x00'*2, bin_ip, '\x00'*8)
@@ -188,13 +187,13 @@ class UdsServer(threading.Thread):
         bin_mask = socket.inet_aton("255.255.255.0")
         ifreq = struct.pack('16sH2s4s8s', self.iface, socket.AF_INET, '\x00'*2, bin_mask, '\x00'*8)
         ioctl(sock, SIOCSIFNETMASK, ifreq)
-        
-    def setIpAddr6(self, ip6):
+
+    def set_ip_addr6(self, ip6):
         sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         bin_ipv6 = socket.inet_pton(socket.AF_INET6, ip6)
         ifreq = struct.pack('16si', self.iface, 0)
         ifreq = ioctl(sock, SIOCGIFINDEX, ifreq)
-        if_index = struct.unpack("i", ifreq[16 : 16 + 4])[0]
+        if_index = struct.unpack("i", ifreq[16: 16 + 4])[0]
         ifreq = struct.pack('16sii', bin_ipv6, 64, if_index)
         ioctl(sock, SIOCSIFADDR, ifreq)
         
@@ -271,29 +270,33 @@ class RawTransport:
         """
         pass
 
-    def send_raw_frame(self, dst_mac, dsr_header, payload):
+    def send_raw_frame(self, dst_mac, dsr_message, payload):
         eth_header = self.gen_eth_header(self.node_mac, dst_mac)
 
-        TRANSPORT_LOG.debug("Generating dsr bin header...")
+        # dsr_bin_header = self.gen_dsr_header(dsr_header)
 
-        dsr_bin_header = self.gen_dsr_header(dsr_header)
+        dsr_bin_header = Messages.pack_message(dsr_message)
 
-        TRANSPORT_LOG.debug("Dsr bin header is generated!")
+        # print binascii.hexlify(dsr_bin_header), dsr_message.type
+        # TRANSPORT_LOG.debug("DSR HEADER: %s", binascii.hexlify(dsr_bin_header))
+        # TRANSPORT_LOG.debug("DSR PAYLOAD: %s", binascii.hexlify(payload))
+        # TRANSPORT_LOG.debug("DSR MESSAGE TYPE: %s", dsr_message.type)
 
+        # self.send_socket.send(eth_header + dsr_bin_header + payload)
         self.send_socket.send(eth_header + dsr_bin_header + payload)
-    
-    def gen_dsr_header(self, dsr_header):
-        if dsr_header.type == 4:
-            dsr_bin_string = struct.pack(dsr_header.header_format, dsr_header.type, dsr_header.length,
-                                         self.mac2int(dsr_header.src_mac), self.mac2int(dsr_header.tx_mac),
-                                         int(dsr_header.broadcast_id), int(dsr_header.broadcast_ttl))
-        else:
 
-            dsr_bin_string = struct.pack(dsr_header.header_format, dsr_header.type, dsr_header.length,
-                                         self.mac2int(dsr_header.src_mac), self.mac2int(dsr_header.dst_mac),
-                                         self.mac2int(dsr_header.tx_mac))
-
-        return dsr_bin_string
+    # def gen_dsr_header(self, dsr_header):
+    #     if dsr_header.type == 4:
+    #         dsr_bin_string = struct.pack(dsr_header.header_format, dsr_header.type, dsr_header.length,
+    #                                      self.mac2int(dsr_header.src_mac), self.mac2int(dsr_header.tx_mac),
+    #                                      int(dsr_header.broadcast_id), int(dsr_header.broadcast_ttl))
+    #     else:
+    #
+    #         dsr_bin_string = struct.pack(dsr_header.header_format, dsr_header.type, dsr_header.length,
+    #                                      self.mac2int(dsr_header.src_mac), self.mac2int(dsr_header.dst_mac),
+    #                                      self.mac2int(dsr_header.tx_mac))
+    #
+    #     return dsr_bin_string
     
     def gen_eth_header(self, src_mac, dst_mac):
         src = [int(x, 16) for x in src_mac.split(":")]
@@ -301,22 +304,22 @@ class RawTransport:
 
         return b"".join(map(chr, dst + src + self.proto))
     
-    def mac2int(self, mac):
-        return int(mac.replace(":", ""), 16)
+    # def mac2int(self, mac):
+    #     return int(mac.replace(":", ""), 16)
     
-    def int2mac(self, mac_int):
-        s = hex(mac_int)
-        # !!! WARNING !!! #
-        # This method works ONLY with MAC-48 addresses!!! Need to be rewritten if Zigbee will be used (MAC-64)
-        # This is why there comes up this "14" number in the line below:
-        # 12 chars of MAC address + 2 first chars of "0x"
-        # This "14" number restricts any additional chars at the end of the integer, like:
-        # the "L" character appearing in 32-bit processors
-        mac = ":".join([s[i:i+2] for i in range(2, 14, 2)])
-        return mac
+    # def int2mac(self, mac_int):
+    #     s = hex(mac_int)
+    #     # !!! WARNING !!! #
+    #     # This method works ONLY with MAC-48 addresses!!! Need to be rewritten if Zigbee will be used (MAC-64)
+    #     # This is why there comes up this "14" number in the line below:
+    #     # 12 chars of MAC address + 2 first chars of "0x"
+    #     # This "14" number restricts any additional chars at the end of the integer, like:
+    #     # the "L" character appearing in 32-bit processors
+    #     mac = ":".join([s[i:i+2] for i in range(2, 14, 2)])
+    #     return mac
     
-    def int2ip(self, addr):
-        return socket.inet_ntoa(struct.pack("!I", addr))
+    # def int2ip(self, addr):
+    #     return socket.inet_ntoa(struct.pack("!I", addr))
 
     # Receive and return dsr_header and upper layer data from the interface, filter out the mac addresses,
     # which are not in the self.topology_neighbors list
@@ -334,12 +337,17 @@ class RawTransport:
                 # Get and return dsr_header object and upper layer raw data
                 # Create dsr_header object
                 TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
-                dsr_header_obj = self.create_dsr_object(data)
+
+                # 56 bytes is the maximum possible length of DSR header.
+                # Skip first 14 bytes since this is Ethernet header fields.
+                dsr_header_obj, dsr_header_length = Messages.unpack_message(data[14: 14 + 56])
 
                 # Get upper raw data
-                upper_raw_data = data[(14 + dsr_header_obj.length):]
+                upper_raw_data = data[(14 + dsr_header_length):]
 
-                return dsr_header_obj, upper_raw_data
+                # print binascii.hexlify(data), dsr_header_length, binascii.hexlify(upper_raw_data), dsr_header_obj.type
+
+                return src_mac, dsr_header_obj, upper_raw_data
 
             elif src_mac == self.node_mac:
                 TRANSPORT_LOG.debug("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
@@ -367,44 +375,45 @@ class RawTransport:
                 # Get and return dsr_header object and upper layer raw data
                 # Create dsr_header object
                 TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
-                dsr_header_obj = self.create_dsr_object(data)
+                # Skip first 14 bytes since this is Ethernet header fields.
+                dsr_header_obj, dsr_header_length = Messages.unpack_message(data[14: 14 + 56])
 
                 # Get upper raw data
-                upper_raw_data = data[(14 + dsr_header_obj.length):]
+                upper_raw_data = data[(14 + dsr_header_length):]
 
-                return dsr_header_obj, upper_raw_data
+                return src_mac, dsr_header_obj, upper_raw_data
 
-    def create_dsr_object(self, data):
-        # header_format = Messages.DsrHeader.header_format
-        length = Messages.DsrHeader.length
-        # Skip the Ethernet header, which length is equaled to 14
-        # Get the type of the DSR header
-        dsr_header_str = data[14:(14 + length)]
-        dsr_type = struct.unpack("B", dsr_header_str[:1])[0]   # Read the first byte from the header
-
-        TRANSPORT_LOG.debug("GOT DSR TYPE: %s", dsr_type)
-
-        # If it is a broadcast frame, form special dsr header for the broadcasts
-        if dsr_type == 4:
-            # Unpack dsr_data from the dsr filed in the frame according to the format of dsr type 4
-            dsr_data = struct.unpack(Messages.DsrHeader.broadcast_header_format, dsr_header_str)
-            dsr_header_obj = Messages.DsrHeader(dsr_type)
-            dsr_header_obj.src_mac = self.int2mac(int(dsr_data[2]))
-            dsr_header_obj.tx_mac = self.int2mac(int(dsr_data[3]))
-            dsr_header_obj.broadcast_id = int(dsr_data[4])
-            dsr_header_obj.broadcast_ttl = int(dsr_data[5])
-
-        else:
-            # Unpack dsr_data from the dsr filed in the frame according to the format of dsr types 0, 1, 2 and 3
-            dsr_data = struct.unpack(Messages.DsrHeader.unicast_header_format, dsr_header_str)
-            dsr_header_obj = Messages.DsrHeader(dsr_type)
-            dsr_header_obj.src_mac = self.int2mac(int(dsr_data[2]))
-            dsr_header_obj.dst_mac = self.int2mac(int(dsr_data[3]))
-            dsr_header_obj.tx_mac = self.int2mac(int(dsr_data[4]))
-
-        TRANSPORT_LOG.debug("Created DSR object: %s", str(dsr_header_obj))
-
-        return dsr_header_obj
+    # def create_dsr_object(self, data):
+    #     # header_format = Messages.DsrHeader.header_format
+    #     length = Messages.DsrHeader.length
+    #     # Skip the Ethernet header, which length is equaled to 14
+    #     # Get the type of the DSR header
+    #     dsr_header_str = data[14:(14 + length)]
+    #     dsr_type = struct.unpack("B", dsr_header_str[:1])[0]   # Read the first byte from the header
+    #
+    #     TRANSPORT_LOG.debug("GOT DSR TYPE: %s", dsr_type)
+    #
+    #     # If it is a broadcast frame, form special dsr header for the broadcasts
+    #     if dsr_type == 4:
+    #         # Unpack dsr_data from the dsr filed in the frame according to the format of dsr type 4
+    #         dsr_data = struct.unpack(Messages.DsrHeader.broadcast_header_format, dsr_header_str)
+    #         dsr_header_obj = Messages.DsrHeader(dsr_type)
+    #         dsr_header_obj.src_mac = self.int2mac(int(dsr_data[2]))
+    #         dsr_header_obj.tx_mac = self.int2mac(int(dsr_data[3]))
+    #         dsr_header_obj.broadcast_id = int(dsr_data[4])
+    #         dsr_header_obj.broadcast_ttl = int(dsr_data[5])
+    #
+    #     else:
+    #         # Unpack dsr_data from the dsr filed in the frame according to the format of dsr types 0, 1, 2 and 3
+    #         dsr_data = struct.unpack(Messages.DsrHeader.unicast_header_format, dsr_header_str)
+    #         dsr_header_obj = Messages.DsrHeader(dsr_type)
+    #         dsr_header_obj.src_mac = self.int2mac(int(dsr_data[2]))
+    #         dsr_header_obj.dst_mac = self.int2mac(int(dsr_data[3]))
+    #         dsr_header_obj.tx_mac = self.int2mac(int(dsr_data[4]))
+    #
+    #     TRANSPORT_LOG.debug("Created DSR object: %s", str(dsr_header_obj))
+    #
+    #     return dsr_header_obj
 
     # Get the src_mac address from the given ethernet header
     def get_src_mac(self, eth_header):
@@ -423,3 +432,119 @@ class RawTransport:
         self.running = False
         self.recv_socket.close()
         TRANSPORT_LOG.info("Raw socket closed")
+
+
+# transport = RawTransport("eth0", get_mac("eth0"), [])
+#
+# rreq4_msg = Messages.Rreq4Message()
+# rreq4_msg.id = 0
+# rreq4_msg.src_ip = "10.10.10.10"
+# rreq4_msg.dst_ip = "255.255.255.110"
+# rreq4_msg.hop_count = 11
+#
+# header = Messages.Rreq4Header()
+#
+# bin_header = header.pack(rreq4_msg)
+#
+# print rreq4_msg
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#
+#
+# #####################
+#
+# unicast_packet = Messages.UnicastPacket()
+# unicast_packet.id = 1048576
+# unicast_packet.hop_count = 100
+#
+# header = Messages.UnicastHeader()
+#
+# bin_header = header.pack(unicast_packet)
+#
+# print unicast_packet
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#
+# #####################
+#
+# broadcast_packet = Messages.BroadcastPacket()
+# broadcast_packet.id = 104
+# broadcast_packet.broadcast_ttl = 112
+#
+# header = Messages.BroadcastHeader()
+#
+# bin_header = header.pack(broadcast_packet)
+#
+# print broadcast_packet
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#
+# #####################
+#
+# rreq6_msg = Messages.Rreq6Message()
+# rreq6_msg.id = 100
+# rreq6_msg.src_ip = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+# rreq6_msg.dst_ip = "fe80::346e:ed29:5340:8c64"
+# rreq6_msg.hop_count = 11
+#
+# header = Messages.Rreq6Header()
+#
+# bin_header = header.pack(rreq6_msg)
+#
+# print rreq6_msg
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#
+# #####################
+#
+# hello_msg = Messages.HelloMessage()
+# hello_msg.ipv6_count = 2
+# hello_msg.ipv4_count = 0
+# hello_msg.tx_count = 34
+# hello_msg.ipv4_address = "255.255.255.111"
+# hello_msg.ipv6_addresses = ["2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+#                             "fe80::346e:ed29:5340:8c64", "3731:54:65fe:2::a7"]
+# # rreq6_msg.dst_ip = "fe80::346e:ed29:5340:8c64"
+#
+# header = Messages.HelloHeader()
+#
+# bin_header = header.pack(hello_msg)
+#
+# print hello_msg
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#
+# #####################
+#
+# ack_msg = Messages.AckMessage()
+# ack_msg.tx_count = 255
+# ack_msg.id = 777
+# # ack_msg.msg_hash = hash("asdasasdaqsdasdadadsad") & 0xffffffff
+# ack_msg.msg_hash = 4294967295
+# # print ack_msg.msg_hash
+#
+# header = Messages.AckHeader()
+#
+# bin_header = header.pack(ack_msg)
+#
+# print ack_msg
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#
+# #####################
+#
+# reward_msg = Messages.RewardMessage()
+# reward_msg.id = 1
+# reward_msg.reward_value = 127
+# reward_msg.msg_hash = hash("asdasasdaqsdasdadadsad") & 0xffffffff
+# # reward_msg.msg_hash = 1010
+# # print ack_msg.msg_hash
+#
+# header = Messages.RewardHeader()
+#
+# bin_header = header.pack(reward_msg)
+#
+# print reward_msg
+#
+# transport.send_raw_frame("52:54:00:95:89:97", bin_header, "")
+#

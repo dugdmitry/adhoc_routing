@@ -7,7 +7,6 @@ Created on Jun 8, 2016
 
 import threading
 import time
-import pickle
 
 import Messages
 import routing_logging
@@ -25,10 +24,10 @@ ARQ_HANDLER_LOG = routing_logging.create_routing_log("routing.arq_handler.log", 
 # Main object which sends data and processes corresponding ACKs
 class ArqHandler:
     def __init__(self, raw_transport, table):
-        # Prepare ack dsr header object
-        self.dsr_ack_header = Messages.DsrHeader(5)                      # 5 corresponds to ACK dsr header type
-        self.dsr_ack_header.src_mac = raw_transport.node_mac
-        self.dsr_ack_header.tx_mac = raw_transport.node_mac
+        # # Prepare ack dsr header object
+        # self.dsr_ack_header = Messages.DsrHeader(5)                      # 5 corresponds to ACK dsr header type
+        # self.dsr_ack_header.src_mac = raw_transport.node_mac
+        # self.dsr_ack_header.tx_mac = raw_transport.node_mac
         # Create a dictionary which will contain a map between a (msg.id + dest_address) pair and the ArqRoutine object
         self.msg_thread_map = {}
         self.raw_transport = raw_transport
@@ -36,21 +35,21 @@ class ArqHandler:
 
     # Start the ARQ send for the given message and for each destination address in the dest_list.
     # For now, only the messages with unique ID field are supported.
-    def arq_send(self, message, dsr_header, dest_mac_list):
+    def arq_send(self, message, dest_mac_list):
         for dst_address in dest_mac_list:
             ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
             # Add an entry to msg_thread_map and create a ArqRoutine thread
             hash_str = hash(str(message.id) + dst_address)
             lock.acquire()
             self.msg_thread_map[hash_str] = ArqRoutine(hash_str, self.msg_thread_map,
-                                                       self.raw_transport, message, dsr_header, dst_address)
+                                                       self.raw_transport, message, dst_address)
             lock.release()
             self.msg_thread_map[hash_str].start()
 
     # Start the ARQ broadcast send for the given message.
     # The message will be sent to ALL current neighbors of the node.
     # For now, only the messages with unique ID field are supported.
-    def arq_broadcast_send(self, message, dsr_header):
+    def arq_broadcast_send(self, message):
         dest_mac_list = self.table.get_neighbors()
         for dst_address in dest_mac_list:
             ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
@@ -58,7 +57,7 @@ class ArqHandler:
             hash_str = hash(str(message.id) + dst_address)
             lock.acquire()
             self.msg_thread_map[hash_str] = ArqRoutine(hash_str, self.msg_thread_map,
-                                                       self.raw_transport, message, dsr_header, dst_address)
+                                                       self.raw_transport, message, dst_address)
             lock.release()
             self.msg_thread_map[hash_str].start()
 
@@ -83,28 +82,30 @@ class ArqHandler:
 
         ARQ_HANDLER_LOG.info("Sending ACK back on the message %s", str(message))
 
-        self.dsr_ack_header.dst_mac = dst_mac
+        # self.dsr_ack_header.dst_mac = dst_mac
         # Generate hash from the given message id
         hash_str = hash(str(message.id) + self.raw_transport.node_mac)
         # Create ACK message object
-        ack_message = Messages.AckMessage(hash_str)
+        ack_message = Messages.AckMessage()
+        ack_message.msg_hash = hash_str
         # Send the message
-        self.raw_transport.send_raw_frame(dst_mac, self.dsr_ack_header, pickle.dumps(ack_message))
+        self.raw_transport.send_raw_frame(dst_mac, ack_message, "")
 
 
 # A routine ARQ thread which is responsible for sending the given message/data periodically in a timeout interval,
 # if the corresponding ARQ hasn't been received yet
 class ArqRoutine(threading.Thread):
-    def __init__(self, hash_str, msg_thread_map, raw_transport, message, dsr_header, dst_address):
+    def __init__(self, hash_str, msg_thread_map, raw_transport, message, dst_address):
         super(ArqRoutine, self).__init__()
         self.running = True
         self.hash_str = hash_str
         self.msg_thread_map = msg_thread_map
         self.raw_transport = raw_transport
 
-        self.dsr_header = dsr_header
+        # self.dsr_header = dsr_header
 
-        self.serialized_message = pickle.dumps(message)
+        # self.serialized_message = pickle.dumps(message)
+        self.dsr_message = message
         self.dst_address = dst_address
 
         # Maximum number of retransmissions before dropping and failing the reliable transmission
@@ -134,7 +135,7 @@ class ArqRoutine(threading.Thread):
     # Send message (RREP or RREQ for now) with the dsr header to the dst_address
     def send_msg(self):
 
-        self.raw_transport.send_raw_frame(self.dst_address, self.dsr_header, self.serialized_message)
+        self.raw_transport.send_raw_frame(self.dst_address, self.dsr_message, "")
 
         ARQ_HANDLER_LOG.debug("Sent raw frame on: %s", self.dst_address)
 
