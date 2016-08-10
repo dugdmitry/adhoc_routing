@@ -61,11 +61,7 @@ class AdvertiseNeighbor(threading.Thread):
         super(AdvertiseNeighbor, self).__init__()
 
         self.message = Messages.HelloMessage()
-        # self.message.mac = raw_transport_obj.node_mac
         self.broadcast_mac = raw_transport_obj.broadcast_mac
-        # self.dsr_header = Messages.DsrHeader(1)                 # Type 1 corresponds to the HELLO message
-        # self.dsr_header.src_mac = raw_transport_obj.node_mac
-        # self.dsr_header.tx_mac = raw_transport_obj.node_mac
 
         self.running = True
         self.broadcast_interval = 2
@@ -133,7 +129,6 @@ class ListenNeighbors(threading.Thread):
         self.running = True
         self.node_mac = node_mac
         self.table = table_obj
-        # self.hello_msg_queue = hello_msg_queue
         # Creating a queue for handling HELLO messages from the NeighborDiscovery
         self.hello_msg_queue = Queue.Queue()
 

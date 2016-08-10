@@ -596,16 +596,18 @@ class HelloHeader:
     def unpack(self, binary_header):
         # Get the first fixed part of the header
         fixed_header_unpacked = self.FixedHeader.from_buffer_copy(binary_header)
+        # Create and write to a message object
+        message = HelloMessage()
 
         # Generate the rest of the part
         if fixed_header_unpacked.IPV4_COUNT and fixed_header_unpacked.IPV6_COUNT == 0:
             header_unpacked = self.OnlyIpv4Header.from_buffer_copy(binary_header)
-            # Create and write to a message object
-            message = HelloMessage()
-            message.ipv4_count = header_unpacked.IPV4_COUNT
-            message.ipv6_count = header_unpacked.IPV6_COUNT
+            # # Create and write to a message object
+            # message = HelloMessage()
+            # message.ipv4_count = header_unpacked.IPV4_COUNT
+            # message.ipv6_count = header_unpacked.IPV6_COUNT
             message.ipv4_address = inet_ntoa(struct.pack("!I", header_unpacked.IPV4_ADDRESS))
-            message.tx_count = header_unpacked.TX_COUNT
+            # message.tx_count = header_unpacked.TX_COUNT
 
         elif fixed_header_unpacked.IPV6_COUNT:
 
@@ -623,8 +625,8 @@ class HelloHeader:
             class Header(ctypes.Structure):
                 _fields_ = fields
 
-            # Create and write to a message object
-            message = HelloMessage()
+            # # Create and write to a message object
+            # message = HelloMessage()
 
             header_unpacked = Header.from_buffer_copy(binary_header)
 
@@ -642,14 +644,20 @@ class HelloHeader:
 
                 message.ipv6_addresses.append(inet_ntop(AF_INET6, ipv6_packed_value))
 
-            message.tx_count = header_unpacked.TX_COUNT
+            # message.tx_count = header_unpacked.TX_COUNT
 
         # Else, create a message without ip addresses
         else:
-            message = HelloMessage()
+            # message = HelloMessage()
             message.tx_count = fixed_header_unpacked.TX_COUNT
+            message.ipv4_count = fixed_header_unpacked.IPV4_COUNT
+            message.ipv6_count = fixed_header_unpacked.IPV6_COUNT
             # Return the message
             return message, len(bytearray(fixed_header_unpacked))
+
+        message.ipv4_count = header_unpacked.IPV4_COUNT
+        message.ipv6_count = header_unpacked.IPV6_COUNT
+        message.tx_count = header_unpacked.TX_COUNT
 
         # Return the message
         return message, len(bytearray(header_unpacked))

@@ -27,18 +27,8 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
     def __init__(self, app_transport, raw_transport, neighbor_routine, table):
-        # # Create an arq handler instance
-        # arq_handler = ArqHandler.ArqHandler(raw_transport, table)
-
-        # # Creating a deque list for keeping the received broadcast IDs
-        # broadcast_list = deque(maxlen=10000)  # Limit the max length of the list
-
-        # # Create a handler for waiting for an incoming reward for previously sent packets
-        # reward_wait_handler = RewardHandler.RewardWaitHandler(table)
 
         # Creating main thread objects
-        # self.app_handler_thread = AppHandler(arq_handler, raw_transport, table,
-        #                                      reward_wait_handler, broadcast_list)
 
         self.app_handler_thread = AppHandler(app_transport, raw_transport, table)
 
@@ -258,10 +248,6 @@ class IncomingTrafficHandler(threading.Thread):
             elif dsr_type == 8:
                 DATA_LOG.debug("Got REWARD service message: %s", str(dsr_message))
                 self.handle_reward(dsr_message)
-
-    # # Send the data packet up to virtual interface
-    # def send_up(self, packet):
-    #     self.app_transport.send_to_app(packet)
 
     # Check the dst_mac from dsr_header. If it matches the node's own mac -> send it up to the virtual interface
     # If the packet carries the data, either send it to the next hop, or,
