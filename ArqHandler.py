@@ -24,10 +24,6 @@ ARQ_HANDLER_LOG = routing_logging.create_routing_log("routing.arq_handler.log", 
 # Main object which sends data and processes corresponding ACKs
 class ArqHandler:
     def __init__(self, raw_transport, table):
-        # # Prepare ack dsr header object
-        # self.dsr_ack_header = Messages.DsrHeader(5)                      # 5 corresponds to ACK dsr header type
-        # self.dsr_ack_header.src_mac = raw_transport.node_mac
-        # self.dsr_ack_header.tx_mac = raw_transport.node_mac
         # Create a dictionary which will contain a map between a (msg.id + dest_address) pair and the ArqRoutine object
         self.msg_thread_map = {}
         self.raw_transport = raw_transport
@@ -79,10 +75,7 @@ class ArqHandler:
 
     # Generate and send the ACK on the given service message to the dst_mac
     def send_ack(self, message, dst_mac):
-
         ARQ_HANDLER_LOG.info("Sending ACK back on the message %s", str(message))
-
-        # self.dsr_ack_header.dst_mac = dst_mac
         # Generate hash from the given message id
         hash_str = hash(str(message.id) + self.raw_transport.node_mac)
         # Create ACK message object
@@ -102,9 +95,6 @@ class ArqRoutine(threading.Thread):
         self.msg_thread_map = msg_thread_map
         self.raw_transport = raw_transport
 
-        # self.dsr_header = dsr_header
-
-        # self.serialized_message = pickle.dumps(message)
         self.dsr_message = message
         self.dst_address = dst_address
 

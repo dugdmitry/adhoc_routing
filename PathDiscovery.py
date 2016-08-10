@@ -80,9 +80,7 @@ class RreqRoutine(threading.Thread):
         self.rreq_thread_list = rreq_thread_list
         self.src_ip = src_ip
         self.dst_ip = dst_ip
-        # self.node_mac = table.node_mac
 
-        # self.dsr_header = Messages.DsrHeader(2)       # Type 2 corresponds to RREQ service message
         self.max_retries = 1
         self.interval = 10
 
@@ -114,12 +112,7 @@ class RreqRoutine(threading.Thread):
         rreq.src_ip = self.src_ip
         rreq.dst_ip = self.dst_ip
         rreq.hop_count = 1
-        
-        # # Prepare a dsr_header
-        # self.dsr_header.src_mac = self.node_mac
-        # self.dsr_header.tx_mac = self.node_mac
 
-        # self.arq_handler.arq_send(rreq, self.dsr_header, self.table.get_neighbors())
         self.arq_handler.arq_broadcast_send(rreq)
 
         PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", str(self.dst_ip))

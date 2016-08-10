@@ -82,9 +82,6 @@ class RewardWaitThread(threading.Thread):
             del self.reward_wait_list[hash(self.dst_ip + self.mac)]
             # lock.release()
 
-    # def set_reward(self, reward):
-    #     self.reward_wait_queue.put(reward)
-
 
 # A class which handles a reward generation and sending back to the sender node.
 class RewardSendHandler:
@@ -117,10 +114,6 @@ class RewardSendThread(threading.Thread):
         self.table = table
         self.raw_transport = raw_transport
         self.reward_send_list = reward_send_list
-        # # Create a dsr_header object
-        # self.dsr_header = Messages.DsrHeader(6)         # Type 6 corresponds to Reward Message
-        # # Create Reward dsr_message
-        # self.dsr_reward_message = Messages.RewardMessage(hash(self.dst_ip + self.node_mac))
         # A time interval the thread waits for, ere generating and sending back the RewardMessage.
         # This timeout is needed to control a number of generated reward messages for some number of
         # the received packets with the same dst_ip.
@@ -133,9 +126,6 @@ class RewardSendThread(threading.Thread):
         avg_value = self.table.get_avg_value(self.dst_ip)
         # Create Reward dsr_message and assign the reward value
         dsr_reward_message = Messages.RewardMessage(avg_value, hash(self.dst_ip + self.node_mac))
-        # # Assign a reward to the reward message
-        # self.dsr_reward_message.reward_value = avg_value
-        # self.dsr_reward_message.msg_hash = hash(self.dst_ip + self.node_mac)
         # Send it back to the node which has sent the packet
         self.raw_transport.send_raw_frame(self.mac, dsr_reward_message, "")
         # Delete its own entry from the reward_send_list
