@@ -9,7 +9,6 @@ import Messages
 import Transport
 import threading
 import time
-import Queue
 from socket import inet_aton
 from socket import error as sock_error
 
@@ -36,10 +35,10 @@ class NeighborDiscovery:
         # Create initial empty neighbors file
         f = open("neighbors_file", "w")
         f.close()
-        # Creating a queue for handling HELLO messages from the NeighborDiscovery
-        self.hello_msg_queue = Queue.Queue()
+        # # Creating a queue for handling HELLO messages from the NeighborDiscovery
+        # self.hello_msg_queue = Queue.Queue()
         # Create listening and advertising threads
-        self.listen_thread = ListenNeighbors(raw_transport_obj.node_mac, table_obj, self.hello_msg_queue)
+        self.listen_thread = ListenNeighbors(raw_transport_obj.node_mac, table_obj)
         self.advertise_thread = AdvertiseNeighbor(raw_transport_obj, table_obj)
 
     def run(self):
@@ -128,12 +127,14 @@ class AdvertiseNeighbor(threading.Thread):
 # A thread for listening to incoming Hello messages and registering the corresponding neighbors.
 # It handles the cases when the neighbors are disappeared, or some new nodes have appeared.
 class ListenNeighbors(threading.Thread):
-    def __init__(self, node_mac, table_obj, hello_msg_queue):
+    def __init__(self, node_mac, table_obj):
         super(ListenNeighbors, self).__init__()
         self.running = True
         self.node_mac = node_mac
         self.table = table_obj
-        self.hello_msg_queue = hello_msg_queue
+        # self.hello_msg_queue = hello_msg_queue
+        # # Creating a queue for handling HELLO messages from the NeighborDiscovery
+        # self.hello_msg_queue = Queue.Queue()
 
         # Internal list of current neighbors in a form {mac: neighbor_object}
         self.neighbors_list = table_obj.neighbors_list
@@ -142,9 +143,13 @@ class ListenNeighbors(threading.Thread):
 
     def run(self):
         while self.running:
-            src_mac, dsr_hello_message = self.hello_msg_queue.get()
-            # self.process_neighbor(pickle.loads(data))
-            self.process_neighbor(src_mac, dsr_hello_message)
+            # src_mac, dsr_hello_message = self.hello_msg_queue.get()
+            # self.process_neighbor(src_mac, dsr_hello_message)
+            time.sleep(5)
+
+    def process_hello_message(self, src_mac, dsr_hello_message):
+        # self.hello_msg_queue.put((src_mac, dsr_hello_message))
+        self.process_neighbor(src_mac, dsr_hello_message)
 
     def process_neighbor(self, src_mac, dsr_hello_message):
         l3_addresses_from_message = []
