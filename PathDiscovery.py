@@ -5,46 +5,44 @@ Created on Oct 8, 2014
 @author: Dmitrii Dugaev
 """
 
-import time
-import threading
 import Messages
 
 import routing_logging
 
-lock = threading.Lock()
-
 PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery")
 
 
+# TODO: implement a deletion mechanism of old entries, which didn't receive the RREP for some reason.
 class PathDiscoveryHandler:
     def __init__(self, app_queue, arq_handler):
-        self.rreq_thread_list = {}
+        # List of delayed packets until the RREP isn't received. Format: {dst_ip: [packet1, ..., packetN]}
+        self.delayed_packets_list = {}
 
         self.app_queue = app_queue
         self.arq_handler = arq_handler
 
     def run_path_discovery(self, src_ip, dst_ip, packet):
-
-        # Check if the dst_ip in the current list of requests
-        if dst_ip in self.rreq_thread_list:
-
-            lock.acquire()
-            self.rreq_thread_list[dst_ip].add_packet(packet)
-
+        # Check if the dst_ip in the current list
+        if dst_ip in self.delayed_packets_list:
+            self.delayed_packets_list[dst_ip].append(packet)
             PATH_DISCOVERY_LOG.info("Added a delayed packet: %s", dst_ip)
-            lock.release()
 
-        # If the request is new, start a new request thread, append new request to rreq_list
+        # If the request is new, create a new entry, append delayed packets, and send RREQ message
         else:
-
             PATH_DISCOVERY_LOG.info("No DST_IP in rreq list: %s", dst_ip)
+            self.delayed_packets_list.update({dst_ip: [packet]})
+            # Send RREQ
+            self.send_rreq(src_ip, dst_ip)
 
-            lock.acquire()
-            self.rreq_thread_list[dst_ip] = RreqRoutine(self.arq_handler, self.rreq_thread_list, src_ip, dst_ip)
-            self.rreq_thread_list[dst_ip].add_packet(packet)
-            lock.release()
+    # Generate and send RREQ
+    def send_rreq(self, src_ip, dst_ip):
+        rreq = Messages.RreqMessage()
+        rreq.src_ip = src_ip
+        rreq.dst_ip = dst_ip
+        rreq.hop_count = 1
 
-            self.rreq_thread_list[dst_ip].start()
+        self.arq_handler.arq_broadcast_send(rreq)
+        PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", dst_ip)
 
     # Provides interface for handling RREP which have been received by IncomingTrafficHandler from the net interface
     def process_rrep(self, rrep):
@@ -52,79 +50,13 @@ class PathDiscoveryHandler:
 
         PATH_DISCOVERY_LOG.info("Got RREP. Deleting RREQ thread...")
 
-        if src_ip in self.rreq_thread_list:
-            lock.acquire()
-            thread = self.rreq_thread_list[src_ip]
-            lock.release()
-
+        if src_ip in self.delayed_packets_list:
             # Send the packets back to original app_queue
-            for packet in thread.delayed_packets:
+            for packet in self.delayed_packets_list[src_ip]:
                 PATH_DISCOVERY_LOG.info("Putting delayed packets back to app_queue...")
                 PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet))
 
                 self.app_queue.put(packet)
 
-            lock.acquire()
-            thread.quit()
-            del self.rreq_thread_list[src_ip]
-            lock.release()
-
-    def quit(self):
-        for i in self.rreq_thread_list:
-            self.rreq_thread_list[i].quit()
-
-
-# A routine thread for periodically broadcasting RREQs
-class RreqRoutine(threading.Thread):
-    def __init__(self, arq_handler, rreq_thread_list, src_ip, dst_ip):
-        super(RreqRoutine, self).__init__()
-        self.running = True
-
-        self.arq_handler = arq_handler
-
-        self.delayed_packets = list()
-
-        self.rreq_thread_list = rreq_thread_list
-        self.src_ip = src_ip
-        self.dst_ip = dst_ip
-
-        self.max_retries = 1
-        self.interval = 10
-
-    def run(self):
-        count = 0
-        while self.running:
-            if count < self.max_retries:
-                self.send_rreq()
-                time.sleep(self.interval)
-            else:
-                # Max retries reached. Delete corresponding packets from rreq_list, stop the thread
-                PATH_DISCOVERY_LOG.info("Maximum retries reached!!! Deleting the thread...")
-
-                lock.acquire()
-                if self.rreq_thread_list.get(self.dst_ip):
-                    del self.rreq_thread_list[self.dst_ip]
-                lock.release()
-
-                # Stop the thread
-                self.quit()
-                
-            count += 1
-
-    # Add newly incoming packet to the list of delayed packets
-    def add_packet(self, packet):
-        self.delayed_packets.append(packet)
-            
-    # Generate and send RREQ
-    def send_rreq(self):
-        rreq = Messages.RreqMessage()
-        rreq.src_ip = self.src_ip
-        rreq.dst_ip = self.dst_ip
-        rreq.hop_count = 1
-
-        self.arq_handler.arq_broadcast_send(rreq)
-
-        PATH_DISCOVERY_LOG.info("New  RREQ for IP: '%s' has been sent. Waiting for RREP", str(self.dst_ip))
-        
-    def quit(self):
-        self.running = False
+            # Delete the entry
+            del self.delayed_packets_list[src_ip]

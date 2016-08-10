@@ -51,7 +51,7 @@ class DataHandler:
 # It initialises all handler objects, which then will be used by IncomingTraffic thread upon receiving messages
 # from the network.
 class AppHandler(threading.Thread):
-    def __init__(self, app_transport, raw_transport, table):    # , reward_wait_handler, broadcast_list):
+    def __init__(self, app_transport, raw_transport, table):
         super(AppHandler, self).__init__()
         self.running = True
         # Create a queue for incoming app data
@@ -76,7 +76,6 @@ class AppHandler(threading.Thread):
 
         # Create and start path_discovery_handler for dealing with the packets with no next hop node
         self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(self.app_queue, self.arq_handler)
-        # self.reward_wait_handler = reward_wait_handler
 
     def run(self):
         while self.running:
@@ -170,7 +169,6 @@ class AppHandler(threading.Thread):
 
     def quit(self):
         self.running = False
-        self.path_discovery_handler.quit()
 
 
 class IncomingTrafficHandler(threading.Thread):
