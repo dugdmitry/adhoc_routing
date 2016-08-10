@@ -9,6 +9,7 @@ import Messages
 import Transport
 import threading
 import time
+import Queue
 from socket import inet_aton
 from socket import error as sock_error
 
@@ -133,8 +134,8 @@ class ListenNeighbors(threading.Thread):
         self.node_mac = node_mac
         self.table = table_obj
         # self.hello_msg_queue = hello_msg_queue
-        # # Creating a queue for handling HELLO messages from the NeighborDiscovery
-        # self.hello_msg_queue = Queue.Queue()
+        # Creating a queue for handling HELLO messages from the NeighborDiscovery
+        self.hello_msg_queue = Queue.Queue()
 
         # Internal list of current neighbors in a form {mac: neighbor_object}
         self.neighbors_list = table_obj.neighbors_list
@@ -143,13 +144,11 @@ class ListenNeighbors(threading.Thread):
 
     def run(self):
         while self.running:
-            # src_mac, dsr_hello_message = self.hello_msg_queue.get()
-            # self.process_neighbor(src_mac, dsr_hello_message)
-            time.sleep(5)
+            src_mac, dsr_hello_message = self.hello_msg_queue.get()
+            self.process_neighbor(src_mac, dsr_hello_message)
 
     def process_hello_message(self, src_mac, dsr_hello_message):
-        # self.hello_msg_queue.put((src_mac, dsr_hello_message))
-        self.process_neighbor(src_mac, dsr_hello_message)
+        self.hello_msg_queue.put((src_mac, dsr_hello_message))
 
     def process_neighbor(self, src_mac, dsr_hello_message):
         l3_addresses_from_message = []
