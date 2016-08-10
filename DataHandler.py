@@ -195,7 +195,7 @@ class IncomingTrafficHandler(threading.Thread):
         self.path_discovery_handler = app_handler_thread.path_discovery_handler
 
         # self.hello_msg_queue = hello_msg_queue
-        self.neighbor_listen_thread = neighbor_routine.listen_thread
+        self.listen_neighbors_handler = neighbor_routine.listen_neighbors_handler
         self.table = table
         self.broadcast_list = app_handler_thread.broadcast_list
         self.broadcast_mac = raw_transport.broadcast_mac
@@ -239,7 +239,7 @@ class IncomingTrafficHandler(threading.Thread):
                 DATA_LOG.debug("Got HELLO service message: %s", str(dsr_message))
                 # Handle HELLO message
                 # self.hello_msg_queue.put((src_mac, dsr_message))
-                self.neighbor_listen_thread.process_hello_message(src_mac, dsr_message)
+                self.listen_neighbors_handler.process_neighbor(src_mac, dsr_message)
 
             elif dsr_type == 7:
                 DATA_LOG.debug("Got ACK service message: %s", str(dsr_message))

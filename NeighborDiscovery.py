@@ -9,7 +9,6 @@ import Messages
 import Transport
 import threading
 import time
-import Queue
 from socket import inet_aton
 from socket import error as sock_error
 
@@ -24,8 +23,6 @@ NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.lo
 class Neighbor:
     def __init__(self):
         self.l3_addresses = list()
-        # self.ipv4_address = str()
-        # self.ipv6_addresses = list()
         self.mac = str()
         self.last_activity = time.time()
 
@@ -36,18 +33,16 @@ class NeighborDiscovery:
         # Create initial empty neighbors file
         f = open("neighbors_file", "w")
         f.close()
-        # # Creating a queue for handling HELLO messages from the NeighborDiscovery
-        # self.hello_msg_queue = Queue.Queue()
         # Create listening and advertising threads
-        self.listen_thread = ListenNeighbors(raw_transport_obj.node_mac, table_obj)
+        self.listen_neighbors_handler = ListenNeighbors(raw_transport_obj.node_mac, table_obj)
         self.advertise_thread = AdvertiseNeighbor(raw_transport_obj, table_obj)
 
     def run(self):
-        self.listen_thread.start()
+        # self.listen_thread.start()
         self.advertise_thread.start()
 
     def stop_threads(self):
-        self.listen_thread.quit()
+        # self.listen_thread.quit()
         self.advertise_thread.quit()
 
         NEIGHBOR_LOG.info("NeighborDiscovery threads are stopped")
@@ -110,8 +105,6 @@ class AdvertiseNeighbor(threading.Thread):
             self.message.ipv4_count = 0
             self.message.ipv6_count = 0
 
-        # self.message.l3_addresses = node_ips
-
         NEIGHBOR_LOG.debug("Sending HELLO message:\n %s", self.message)
 
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.message, "")
@@ -121,29 +114,17 @@ class AdvertiseNeighbor(threading.Thread):
         self.running = False
 
 
-# A thread for listening to incoming Hello messages and registering the corresponding neighbors.
+# A class for handling incoming Hello messages and registering the corresponding neighbors.
 # It handles the cases when the neighbors are disappeared, or some new nodes have appeared.
-class ListenNeighbors(threading.Thread):
+class ListenNeighbors:
     def __init__(self, node_mac, table_obj):
-        super(ListenNeighbors, self).__init__()
-        self.running = True
         self.node_mac = node_mac
         self.table = table_obj
-        # Creating a queue for handling HELLO messages from the NeighborDiscovery
-        self.hello_msg_queue = Queue.Queue()
 
         # Internal list of current neighbors in a form {mac: neighbor_object}
         self.neighbors_list = table_obj.neighbors_list
         self.expiry_interval = 7
         self.last_expiry_check = time.time()
-
-    def run(self):
-        while self.running:
-            src_mac, dsr_hello_message = self.hello_msg_queue.get()
-            self.process_neighbor(src_mac, dsr_hello_message)
-
-    def process_hello_message(self, src_mac, dsr_hello_message):
-        self.hello_msg_queue.put((src_mac, dsr_hello_message))
 
     def process_neighbor(self, src_mac, dsr_hello_message):
         l3_addresses_from_message = []
@@ -230,6 +211,3 @@ class ListenNeighbors(threading.Thread):
             # lock.acquire()
             del self.neighbors_list[mac]
             # lock.release()
-
-    def quit(self):
-        self.running = False
