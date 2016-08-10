@@ -5,18 +5,22 @@ Created on Oct 8, 2014
 @author: Dmitrii Dugaev
 """
 
-import Messages
+import time
 
+import Messages
 import routing_logging
 
 PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.log", "path_discovery")
 
 
-# TODO: implement a deletion mechanism of old entries, which didn't receive the RREP for some reason.
 class PathDiscoveryHandler:
     def __init__(self, app_queue, arq_handler):
         # List of delayed packets until the RREP isn't received. Format: {dst_ip: [packet1, ..., packetN]}
         self.delayed_packets_list = {}
+        # Entry deletion timeout, in seconds, in case of the RREP hasn't been received
+        self.entry_deletion_timeout = 3
+        # List of entry creation timestamps. Format: {dst_ip: TS}
+        self.creation_timestamps = {}
 
         self.app_queue = app_queue
         self.arq_handler = arq_handler
@@ -24,15 +28,31 @@ class PathDiscoveryHandler:
     def run_path_discovery(self, src_ip, dst_ip, packet):
         # Check if the dst_ip in the current list
         if dst_ip in self.delayed_packets_list:
-            self.delayed_packets_list[dst_ip].append(packet)
-            PATH_DISCOVERY_LOG.info("Added a delayed packet: %s", dst_ip)
+            # Check if the timeout has been reached
+            if (time.time() - self.creation_timestamps[dst_ip]) > self.entry_deletion_timeout:
+                # If yes, Delete the entry with all delayed packets
+                del self.delayed_packets_list[dst_ip]
+                # Delete the timestamp
+                del self.creation_timestamps[dst_ip]
+                # Run path discovery for the current packet again
+                self.run_path_discovery(src_ip, dst_ip, packet)
+
+            else:
+                # If no, append the packet to the delayed list
+                self.delayed_packets_list[dst_ip].append(packet)
+                PATH_DISCOVERY_LOG.info("Added a delayed packet: %s", dst_ip)
 
         # If the request is new, create a new entry, append delayed packets, and send RREQ message
         else:
             PATH_DISCOVERY_LOG.info("No DST_IP in rreq list: %s", dst_ip)
+            # Create a new entry
             self.delayed_packets_list.update({dst_ip: [packet]})
+            # Set the timestamp of creation
+            self.creation_timestamps.update({dst_ip: time.time()})
             # Send RREQ
             self.send_rreq(src_ip, dst_ip)
+            # Set the timestamp
+            self.creation_timestamps[dst_ip] = time.time()
 
     # Generate and send RREQ
     def send_rreq(self, src_ip, dst_ip):
@@ -60,3 +80,5 @@ class PathDiscoveryHandler:
 
             # Delete the entry
             del self.delayed_packets_list[src_ip]
+            # Delete the timestamp
+            del self.creation_timestamps[src_ip]
