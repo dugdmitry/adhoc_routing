@@ -60,8 +60,7 @@ class AppHandler(threading.Thread):
         self.table = table
 
         # Creating a deque list for keeping the received broadcast IDs
-        # TODO: limit the max length of the list to much smaller value. So the new IDs will not collide with old ones
-        self.broadcast_list = deque(maxlen=10000)  # Limit the max length of the list
+        self.broadcast_list = deque(maxlen=100)  # Limit the max length of the list
 
         self.app_transport = app_transport
         self.raw_transport = raw_transport
@@ -207,9 +206,8 @@ class IncomingTrafficHandler(threading.Thread):
         self.reward_send_handler = RewardHandler.RewardSendHandler(table, raw_transport)
         self.reward_wait_handler = app_handler_thread.reward_wait_handler
 
-        # TODO: limit the max length of the list to much smaller value. So the new IDs will not collide with old ones
-        self.rreq_ids = deque(maxlen=10000)  # Limit the max length of the list
-        self.rrep_ids = deque(maxlen=10000)  # Limit the max length of the list
+        self.rreq_ids = deque(maxlen=100)  # Limit the max length of the list
+        self.rrep_ids = deque(maxlen=100)  # Limit the max length of the list
 
     def run(self):
         while self.running:
