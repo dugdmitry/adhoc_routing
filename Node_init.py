@@ -203,7 +203,7 @@ class RoutingDaemon(Daemon):
 
             while True:
                 packet = app_transport.recv_from_app()
-                data_handler.app_handler_thread.process_packet(packet)
+                data_handler.app_handler.process_packet(packet)
 
         # Catch SIGINT signal, raised by the daemon
         except KeyboardInterrupt:

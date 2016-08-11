@@ -14,7 +14,7 @@ PATH_DISCOVERY_LOG = routing_logging.create_routing_log("routing.path_discovery.
 
 
 class PathDiscoveryHandler:
-    def __init__(self, app_queue, arq_handler):
+    def __init__(self, app_transport, arq_handler):
         # List of delayed packets until the RREP isn't received. Format: {dst_ip: [packet1, ..., packetN]}
         self.delayed_packets_list = {}
         # Entry deletion timeout, in seconds, in case of the RREP hasn't been received
@@ -22,7 +22,7 @@ class PathDiscoveryHandler:
         # List of entry creation timestamps. Format: {dst_ip: TS}
         self.creation_timestamps = {}
 
-        self.app_queue = app_queue
+        self.app_transport = app_transport
         self.arq_handler = arq_handler
 
     def run_path_discovery(self, src_ip, dst_ip, packet):
@@ -76,7 +76,7 @@ class PathDiscoveryHandler:
                 PATH_DISCOVERY_LOG.info("Putting delayed packets back to app_queue...")
                 PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", str(packet))
 
-                self.app_queue.put(packet)
+                self.app_transport.send_to_interface(packet)
 
             # Delete the entry
             del self.delayed_packets_list[src_ip]

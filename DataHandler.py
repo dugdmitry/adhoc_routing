@@ -11,7 +11,6 @@ import PathDiscovery
 import ArqHandler
 import RewardHandler
 
-import Queue
 import threading
 from collections import deque
 
@@ -30,41 +29,32 @@ class DataHandler:
 
         # Creating main thread objects
 
-        self.app_handler_thread = AppHandler(app_transport, raw_transport, table)
+        self.app_handler = AppHandler(app_transport, raw_transport, table)
 
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler_thread, neighbor_routine,
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler, neighbor_routine,
                                                                       raw_transport, table)
 
-    # Starting the threads
+    # Starting the thread
     def run(self):
-        self.app_handler_thread.start()
         self.incoming_traffic_handler_thread.start()
 
     def stop_threads(self):
-        self.app_handler_thread.quit()
         self.incoming_traffic_handler_thread.quit()
 
         DATA_LOG.info("Traffic handlers are stopped")
 
 
-# The main thread, a starting point of message transmission.
+# A starting point of message transmission.
 # It initialises all handler objects, which then will be used by IncomingTraffic thread upon receiving messages
 # from the network.
-class AppHandler(threading.Thread):
+class AppHandler:
     def __init__(self, app_transport, raw_transport, table):
-        super(AppHandler, self).__init__()
-        self.running = True
-        # Create a queue for incoming app data
-        self.app_queue = Queue.Queue()
-
-        self.table = table
-
         # Creating a deque list for keeping the received broadcast IDs
         self.broadcast_list = deque(maxlen=100)  # Limit the max length of the list
 
         self.app_transport = app_transport
         self.raw_transport = raw_transport
-        self.node_mac = raw_transport.node_mac
+        self.table = table
 
         self.broadcast_mac = raw_transport.broadcast_mac
 
@@ -75,102 +65,95 @@ class AppHandler(threading.Thread):
         self.reward_wait_handler = RewardHandler.RewardWaitHandler(table)
 
         # Create and start path_discovery_handler for dealing with the packets with no next hop node
-        self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(self.app_queue, self.arq_handler)
+        self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(app_transport, self.arq_handler)
 
-    def run(self):
-        while self.running:
-            # Get packet from queue
-            packet = self.app_queue.get()
-            # Get the src_ip and dst_ip from the packet
-            src_ip, dst_ip = Transport.get_l3_addresses_from_packet(packet)
-
-            # Try to find a mac address of the next hop where a packet should be forwarded to
-            next_hop_mac = self.table.get_next_hop_mac(dst_ip)
-
-            # Check if the packet's destination address is IPv6 multicast
-            # Always starts from "ff0X::",
-            # see https://en.wikipedia.org/wiki/IPv6_address#Multicast_addresses
-            if dst_ip[:2] == "ff":
-
-                DATA_LOG.info("Multicast IPv6: %s", dst_ip)
-
-                # Create a broadcast dsr message
-                dsr_message = Messages.BroadcastPacket()
-                dsr_message.broadcast_ttl = 1
-                # Put the dsr broadcast id to the broadcast_list
-                self.broadcast_list.append(dsr_message.id)
-
-                # Broadcast it further to the network
-                self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
-
-            # Check if the packet's destination address is IPv4 multicast or broadcast.
-            # The IPv4 multicasts start with either 224.x.x.x or 239.x.x.x
-            # See: https://en.wikipedia.org/wiki/Multicast_address#IPv4
-            elif dst_ip[:3] == "224" or dst_ip[:3] == "239":
-                DATA_LOG.info("Multicast IPv4: %s", dst_ip)
-
-                # Create a broadcast dsr message
-                dsr_message = Messages.BroadcastPacket()
-                dsr_message.broadcast_ttl = 1
-                # Put the dsr broadcast id to the broadcast_list
-                self.broadcast_list.append(dsr_message.id)
-
-                # Broadcast it further to the network
-                self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
-
-            # Check if the packet's destination address is IPv4 broadcast.
-            # The IPv4 broadcasts ends with .255
-            # See: https://en.wikipedia.org/wiki/IP_address#Broadcast_addressing
-            elif dst_ip[-3:] == "255":
-                DATA_LOG.info("Broadcast IPv4: %s", dst_ip)
-
-                # Create a broadcast dsr message
-                dsr_message = Messages.BroadcastPacket()
-                dsr_message.broadcast_ttl = 1
-                # Put the dsr broadcast id to the broadcast_list
-                self.broadcast_list.append(dsr_message.id)
-
-                # Broadcast it further to the network
-                self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
-
-            # If next_hop_mac is None, it means that there is no current entry witch dst_ip.
-            # In that case, start a PathDiscovery procedure
-            elif next_hop_mac is None:
-
-                DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
-
-                # ## Initiate PathDiscovery procedure for the given packet ## #
-                self.path_discovery_handler.run_path_discovery(src_ip, dst_ip, packet)
-
-            # Else, the packet is unicast, and has the corresponding Entry.
-            # Forward packet to the next hop. Start a thread wor waiting an ACK with reward.
-            else:
-
-                DATA_LOG.debug("For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
-
-                # Create a unicast dsr message with proper values
-                dsr_message = Messages.UnicastPacket()
-                dsr_message.hop_count = 1
-
-                # Send the raw data with dsr_header to the next hop
-                self.raw_transport.send_raw_frame(next_hop_mac, dsr_message, packet)
-                # Process the packet through the reward_wait_handler
-                self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
-
-        DATA_LOG.debug("LOOP FINISHED!!!")
-
-    # Provides callback for processing the data packets which have come from different threads
     def process_packet(self, packet):
-        self.app_queue.put(packet)
+        # Get the src_ip and dst_ip from the packet
+        src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
 
-    # Send the data packet up to virtual interface
+        # Try to find a mac address of the next hop where a packet should be forwarded to
+        next_hop_mac = self.table.get_next_hop_mac(dst_ip)
+
+        # Check if the packet's destination address is IPv6 multicast
+        # Always starts from "ff0X::",
+        # see https://en.wikipedia.org/wiki/IPv6_address#Multicast_addresses
+        if dst_ip[:2] == "ff":
+
+            DATA_LOG.info("Multicast IPv6: %s", dst_ip)
+
+            # Create a broadcast dsr message
+            dsr_message = Messages.BroadcastPacket()
+            dsr_message.broadcast_ttl = 1
+            # Put the dsr broadcast id to the broadcast_list
+            self.broadcast_list.append(dsr_message.id)
+
+            # Broadcast it further to the network
+            self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
+
+        # Check if the packet's destination address is IPv4 multicast or broadcast.
+        # The IPv4 multicasts start with either 224.x.x.x or 239.x.x.x
+        # See: https://en.wikipedia.org/wiki/Multicast_address#IPv4
+        elif dst_ip[:3] == "224" or dst_ip[:3] == "239":
+            DATA_LOG.info("Multicast IPv4: %s", dst_ip)
+
+            # Create a broadcast dsr message
+            dsr_message = Messages.BroadcastPacket()
+            dsr_message.broadcast_ttl = 1
+            # Put the dsr broadcast id to the broadcast_list
+            self.broadcast_list.append(dsr_message.id)
+
+            # Broadcast it further to the network
+            self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
+
+        # Check if the packet's destination address is IPv4 broadcast.
+        # The IPv4 broadcasts ends with .255
+        # See: https://en.wikipedia.org/wiki/IP_address#Broadcast_addressing
+        elif dst_ip[-3:] == "255":
+            DATA_LOG.info("Broadcast IPv4: %s", dst_ip)
+
+            # Create a broadcast dsr message
+            dsr_message = Messages.BroadcastPacket()
+            dsr_message.broadcast_ttl = 1
+            # Put the dsr broadcast id to the broadcast_list
+            self.broadcast_list.append(dsr_message.id)
+
+            # Broadcast it further to the network
+            self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
+
+        # If next_hop_mac is None, it means that there is no current entry witch dst_ip.
+        # In that case, start a PathDiscovery procedure
+        elif next_hop_mac is None:
+
+            DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
+
+            # ## Initiate PathDiscovery procedure for the given packet ## #
+            self.path_discovery_handler.run_path_discovery(src_ip, dst_ip, packet)
+
+        # Else, the packet is unicast, and has the corresponding Entry.
+        # Forward packet to the next hop. Start a thread wor waiting an ACK with reward.
+        else:
+
+            DATA_LOG.debug("For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
+
+            # Create a unicast dsr message with proper values
+            dsr_message = Messages.UnicastPacket()
+            dsr_message.hop_count = 1
+
+            # Send the raw data with dsr_header to the next hop
+            self.raw_transport.send_raw_frame(next_hop_mac, dsr_message, packet)
+            # Process the packet through the reward_wait_handler
+            self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
+
+    # Send the packet back to the virtual network interface
+    def send_back(self, packet):
+        self.app_transport.send_to_interface(packet)
+
+    # Send the data packet up to the application
     def send_up(self, packet):
         self.app_transport.send_to_app(packet)
 
-    def quit(self):
-        self.running = False
 
-
+# A thread for receiving the incoming data from a real network interface.
 class IncomingTrafficHandler(threading.Thread):
     def __init__(self, app_handler_thread, neighbor_routine, raw_transport, table):
         super(IncomingTrafficHandler, self).__init__()
@@ -183,22 +166,17 @@ class IncomingTrafficHandler(threading.Thread):
             self.handle_rrep = self.handle_rrep_monitoring_mode
 
         self.running = True
-        # self.app_transport = app_transport
         self.app_handler_thread = app_handler_thread
         self.raw_transport = raw_transport
-        # self.app_queue = app_handler_thread.app_queue
         self.arq_handler = app_handler_thread.arq_handler
 
         self.path_discovery_handler = app_handler_thread.path_discovery_handler
 
-        # self.hello_msg_queue = hello_msg_queue
         self.listen_neighbors_handler = neighbor_routine.listen_neighbors_handler
         self.table = table
         self.broadcast_list = app_handler_thread.broadcast_list
         self.broadcast_mac = raw_transport.broadcast_mac
         self.max_broadcast_ttl = 1          # Set a maximum number of hops a broadcast frame can be forwarded over
-
-        self.node_mac = raw_transport.node_mac
 
         # Create a handler for generating and sending back a reward to the sender node
         self.reward_send_handler = RewardHandler.RewardSendHandler(table, raw_transport)
@@ -250,7 +228,7 @@ class IncomingTrafficHandler(threading.Thread):
     # if the dst_mac equals to the node's mac, send the packet up to the application
     def handle_data_packet(self, src_mac, dsr_message, packet):
         # Get src_ip, dst_ip from the incoming packet
-        src_ip, dst_ip = Transport.get_l3_addresses_from_packet(packet)
+        src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
 
         # Generate and send back a reward message
         self.reward_send_handler.send_reward(dst_ip, src_mac)
@@ -271,7 +249,7 @@ class IncomingTrafficHandler(threading.Thread):
             # TODO: check whether it is possible to put the packet directly into the file descriptor.
             # If no entry is found, put the packet to the initial AppQueue
             if next_hop_mac is None:
-                self.app_handler_thread.process_packet(packet)
+                self.app_handler_thread.send_back(packet)
 
             # Else, forward the packet to the next_hop. Start a reward wait thread, if necessary.
             else:
@@ -286,7 +264,7 @@ class IncomingTrafficHandler(threading.Thread):
     # send the packet up to the application, otherwise, discard the packet
     def handle_data_packet_monitoring_mode(self, src_mac, dsr_message, packet):
         # Get src_ip, dst_ip from the incoming packet
-        src_ip, dst_ip = Transport.get_l3_addresses_from_packet(packet)
+        src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
 
         # Generate and send back a reward message
         self.reward_send_handler.send_reward(dst_ip, src_mac)

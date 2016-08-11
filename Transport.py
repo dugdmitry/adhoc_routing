@@ -120,18 +120,25 @@ def get_l3_addresses_from_packet(packet):
     def int2ipv6(addr):
         return socket.inet_ntop(socket.AF_INET6, addr)
 
-    # Get L3 protocol identifier
+    # Get L3 protocol identifier. This is the L3 ID which is being prepended to every packet,
+    # sent to virtual tun interface (packet information flag, IFF_NO_PI set to False, by default).
+    # For more info, see: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
     l3_id = struct.unpack("!H", packet[2:4])[0]
 
     TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
-    # print binascii.hexlify(packet[2:4])
 
     if l3_id == int(IP4_ID):
         addresses = get_data_from_ipv4_header(packet)
-        return addresses
+        return addresses[0], addresses[1], packet
     elif l3_id == int(IP6_ID):
         addresses = get_data_from_ipv6_header(packet)
-        return addresses
+        return addresses[0], addresses[1], packet
+    # If the ID is 0, it means that the packet has been sent back to tun interface again, using raw socket.
+    # So, the tun driver set the ID to 0, since it was the pure raw data, sent via raw socket.
+    elif l3_id == 0:
+        # So, remove the first 4 bytes and get the L3 addresses again,
+        return get_l3_addresses_from_packet(packet[4:])
+
     else:
         # The packet has UNSUPPORTED L3 protocol, drop it
         TRANSPORT_LOG.error("The packet has UNSUPPORTED L3 protocol, dropping the packet")
@@ -208,6 +215,8 @@ class UdsServer(threading.Thread):
 # Class for virtual interface
 class VirtualTransport:
     def __init__(self):
+        # Creating virtual tun interface.
+        # See the documentation: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
         tun_mode = IFF_TUN
         f = os.open("/dev/net/tun", os.O_RDWR)
         ioctl(f, TUNSETIFF, struct.pack("16sH", VIRT_IFACE_NAME, tun_mode))
@@ -216,7 +225,11 @@ class VirtualTransport:
         self.interface_up(VIRT_IFACE_NAME)
         
         self.f = f
-                
+
+        # Create raw socket for sending the packets back to the interface
+        self.virtual_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+        self.virtual_socket.bind((VIRT_IFACE_NAME, 0))
+
     def set_mtu(self, iface, mtu):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ifreq = struct.pack('16sI', iface, int(mtu))
@@ -230,7 +243,11 @@ class VirtualTransport:
 
     def send_to_app(self, packet):
         os.write(self.f, packet)
-        
+
+    # Provides interface for sending back the packets to initial virtual interface
+    def send_to_interface(self, packet):
+        self.virtual_socket.send(packet)
+
     # Receive raw data from virtual interface. Return a list in a form: [src_ip, dst_ip, raw_data]
     def recv_from_app(self):
         output = os.read(self.f, 65000)
