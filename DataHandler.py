@@ -186,7 +186,7 @@ class IncomingTrafficHandler(threading.Thread):
         # self.app_transport = app_transport
         self.app_handler_thread = app_handler_thread
         self.raw_transport = raw_transport
-        self.app_queue = app_handler_thread.app_queue
+        # self.app_queue = app_handler_thread.app_queue
         self.arq_handler = app_handler_thread.arq_handler
 
         self.path_discovery_handler = app_handler_thread.path_discovery_handler
@@ -269,9 +269,10 @@ class IncomingTrafficHandler(threading.Thread):
             DATA_LOG.debug("IncomingTraffic: For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
             DATA_LOG.debug("Current entry: %s", self.table.get_entry(dst_ip))
 
+            # TODO: check whether it is possible to put the packet directly into the file descriptor.
             # If no entry is found, put the packet to the initial AppQueue
             if next_hop_mac is None:
-                self.app_queue.put(packet)
+                self.app_handler_thread.process_packet(packet)
 
             # Else, forward the packet to the next_hop. Start a reward wait thread, if necessary.
             else:
