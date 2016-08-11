@@ -50,11 +50,13 @@ class NeighborDiscovery:
 class AdvertiseNeighbor(threading.Thread):
     def __init__(self, raw_transport_obj, table_obj):
         super(AdvertiseNeighbor, self).__init__()
+        self.running = True
+        # Store current IP addresses of this node
+        self.current_node_ips = [None]
 
         self.message = Messages.HelloMessage()
         self.broadcast_mac = raw_transport_obj.broadcast_mac
 
-        self.running = True
         self.broadcast_interval = 2
 
         self.raw_transport = raw_transport_obj
@@ -79,32 +81,39 @@ class AdvertiseNeighbor(threading.Thread):
     def send_raw_hello(self):
         # Try to get L3 ip address (ipv4 or ipv6) assigned to the node, if there are such ones
         node_ips = Transport.get_l3_addresses_from_interface()
-        # Update entries in RouteTable
-        self.update_ips_in_route_table(node_ips)
 
-        if node_ips:
-            # Check if the node has IPv4 address assigned
-            try:
-                inet_aton(node_ips[0])
-                self.message.ipv4_count = 1
-                self.message.ipv4_address = node_ips[0]
-                # Remove the ipv4 address from list
-                node_ips.pop(0)
-            except sock_error:
+        if self.current_node_ips != node_ips:
+
+            # Update entries in RouteTable
+            self.update_ips_in_route_table(node_ips)
+
+            if node_ips:
+                # Check if the node has IPv4 address assigned
+                try:
+                    inet_aton(node_ips[0])
+                    self.message.ipv4_count = 1
+                    self.message.ipv4_address = node_ips[0]
+
+                    # If there are some IPv6 addresses in the list -> write them as well
+                    self.message.ipv6_count = len(node_ips)
+                    self.message.ipv6_addresses = node_ips[1:]
+
+                except sock_error:
+                    # Otherwise, assign IPv6 addresses
+                    self.message.ipv4_count = 0
+                    self.message.ipv6_count = len(node_ips)
+                    self.message.ipv6_addresses = node_ips
+
+            else:
                 self.message.ipv4_count = 0
-            finally:
-                # If there are some IPv6 addresses in the list -> write them as well
-                self.message.ipv6_count = len(node_ips)
-                for ipv6_addr in node_ips:
-                    self.message.ipv6_addresses.append(ipv6_addr)
-        else:
-            self.message.ipv4_count = 0
-            self.message.ipv6_count = 0
+                self.message.ipv6_count = 0
 
         NEIGHBOR_LOG.debug("Sending HELLO message:\n %s", self.message)
 
         self.raw_transport.send_raw_frame(self.broadcast_mac, self.message, "")
         self.message.tx_count += 1
+        # Update the current list of ips
+        self.current_node_ips = node_ips
 
     def quit(self):
         self.running = False

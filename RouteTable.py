@@ -201,10 +201,6 @@ class Table:
         # Create RL helper object, to handle the selection of the actions
         self.action_selector = ActionSelector()
 
-        # # Create and start a thread for periodically printing out the route table contents
-        # self.print_table_thread = PrintTableThread(self.entries_list)
-        # self.print_table_thread.start()
-
     # This method selects a next hop for the packet with the given dst_ip.
     # The selection is being made from the current estimated values of the neighbors mac addresses,
     # using some of the available action selection algorithms - such as greedy, e-greedy, soft-max and so on.

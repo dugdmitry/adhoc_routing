@@ -17,7 +17,7 @@ import atexit
 from signal import SIGINT, SIGTERM
 
 # Get DEV name from the default configuration file
-from conf import DEV, UDS_ADDRESS, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
+from conf import DEV, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
 # Import module for handling the logging
 import routing_logging
 
@@ -190,16 +190,20 @@ class RoutingDaemon(Daemon):
         neighbor_routine = NeighborDiscovery.NeighborDiscovery(raw_transport, table)
         # Create data handler thread to process all incoming and outgoing messages
         data_handler = DataHandler.DataHandler(app_transport, raw_transport, neighbor_routine, table)
-        # Creating thread for live configuration / interaction with the running program
-        uds_server = Transport.UdsServer(UDS_ADDRESS)
+
+        # Deactivated for now
+        # # Creating thread for live configuration / interaction with the running program
+        # uds_server = Transport.UdsServer(UDS_ADDRESS)
 
         try:
             # Start data handler thread
             data_handler.run()
             # Start Neighbor Discovery procedure
             neighbor_routine.run()
-            # Start uds_server thread
-            uds_server.start()
+
+            # Deactivated for now
+            # # Start uds_server thread
+            # uds_server.start()
 
             while True:
                 packet = app_transport.recv_from_app()
@@ -210,9 +214,12 @@ class RoutingDaemon(Daemon):
             # Stop the handlers
             data_handler.stop_threads()
             neighbor_routine.stop_threads()
-            # Stop UDS server
-            uds_server.quit()
-            # Stop the log thread
+
+            # Deactivated for now
+            # # Stop UDS server
+            # uds_server.quit()
+
+            # # Stop the log thread
             routing_logging.stop_log_thread()
 
         return 0
