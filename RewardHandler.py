@@ -6,12 +6,15 @@ Created on Aug 6, 2016
 """
 
 import threading
+import hashlib
 import Queue
 import time
 
 import Messages
 
 lock = threading.Lock()
+
+max_int32 = 0xFFFFFFFF
 
 """
 This module is responsible for a reward distribution between the nodes. It means both reception and transmission of
@@ -33,14 +36,17 @@ class RewardWaitHandler:
     def __init__(self, table):
         self.table = table
         # Define a structure for handling reward wait threads for given dst_ips.
-        # Format: {hash(dst_ip + next_hop_mac): thread_object}.
+        # Format: {hash(dst_ip + next_hop_mac): thread_object}. Hash is 32-bit integer, generated from md5 hash.
         # A reward value is being forwarded to the thread via a queue_object.
         self.reward_wait_list = dict()
 
     # Check if the waiting process for such dst_ip and next_hop_mac has already been initiated or not.
     # If yes - do nothing. Else - start the reward waiting thread.
     def wait_for_reward(self, dst_ip, mac):
-        hash_value = hash(dst_ip + mac)
+        hash_str = hashlib.md5(dst_ip + mac).hexdigest()
+        # Convert hash_str from hex to 32-bit integer
+        hash_value = int(hash_str, 16) & max_int32
+
         if hash_value not in self.reward_wait_list:
             reward_wait_thread = RewardWaitThread(dst_ip, mac, self.table, self.reward_wait_list)
             # lock.acquire()
@@ -79,7 +85,10 @@ class RewardWaitThread(threading.Thread):
         # Finally, delete its own entry from the reward_wait_list
         finally:
             # lock.acquire()
-            del self.reward_wait_list[hash(self.dst_ip + self.mac)]
+            hash_str = hashlib.md5(self.dst_ip + self.mac).hexdigest()
+            # Convert hash_str from hex to 32-bit integer
+            hash_value = int(hash_str, 16) & max_int32
+            del self.reward_wait_list[hash_value]
             # lock.release()
 
 
@@ -89,14 +98,17 @@ class RewardSendHandler:
         self.table = table
         self.raw_transport = raw_transport
         # Define a structure for handling reward send threads for given dst_ips.
-        # Format: {hash(dst_ip + mac): RewardSendThread}.
+        # Format: {hash(dst_ip + mac): RewardSendThread}. Hash is 32-bit integer, generated from md5 hash.
         self.reward_send_list = dict()
 
     # Send the reward back to the sender node after some "hold on" time interval.
     # This timeout is needed to control a number of generated reward messages for some number of
     # the received packets with the same dst_ip.
     def send_reward(self, dst_ip, mac):
-        hash_value = hash(dst_ip + mac)
+        hash_str = hashlib.md5(dst_ip + mac).hexdigest()
+        # Convert hash_str from hex to 32-bit integer
+        hash_value = int(hash_str, 16) & max_int32
+
         if hash_value not in self.reward_send_list:
             reward_send_thread = RewardSendThread(dst_ip, mac, self.table, self.raw_transport, self.reward_send_list)
             self.reward_send_list.update({hash_value: reward_send_thread})
@@ -125,10 +137,16 @@ class RewardSendThread(threading.Thread):
         # Calculate its own average value of the estimated reward towards the given dst_ip
         avg_value = self.table.get_avg_value(self.dst_ip)
         # Create Reward dsr_message and assign the reward value
-        dsr_reward_message = Messages.RewardMessage(avg_value, hash(self.dst_ip + self.node_mac))
+        hash_str = hashlib.md5(self.dst_ip + self.node_mac).hexdigest()
+        # Convert hash_str from hex to 32-bit integer
+        hash_value = int(hash_str, 16) & max_int32
+        dsr_reward_message = Messages.RewardMessage(avg_value, hash_value)
         # Send it back to the node which has sent the packet
         self.raw_transport.send_raw_frame(self.mac, dsr_reward_message, "")
         # Delete its own entry from the reward_send_list
         # lock.acquire()
-        del self.reward_send_list[hash(self.dst_ip + self.mac)]
+        hash_str = hashlib.md5(self.dst_ip + self.mac).hexdigest()
+        # Convert hash_str from hex to 32-bit integer
+        hash_value = int(hash_str, 16) & max_int32
+        del self.reward_send_list[hash_value]
         # lock.release()
