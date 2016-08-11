@@ -234,7 +234,6 @@ class IncomingTrafficHandler(threading.Thread):
             elif dsr_type == 6:
                 DATA_LOG.debug("Got HELLO service message: %s", str(dsr_message))
                 # Handle HELLO message
-                # self.hello_msg_queue.put((src_mac, dsr_message))
                 self.listen_neighbors_handler.process_neighbor(src_mac, dsr_message)
 
             elif dsr_type == 7:
