@@ -95,7 +95,7 @@ class AdvertiseNeighbor(threading.Thread):
                     self.message.ipv4_address = node_ips[0]
 
                     # If there are some IPv6 addresses in the list -> write them as well
-                    self.message.ipv6_count = len(node_ips)
+                    self.message.ipv6_count = len(node_ips[1:])
                     self.message.ipv6_addresses = node_ips[1:]
 
                 except sock_error:
