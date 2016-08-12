@@ -246,7 +246,6 @@ class IncomingTrafficHandler(threading.Thread):
             DATA_LOG.debug("IncomingTraffic: For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
             DATA_LOG.debug("Current entry: %s", self.table.get_entry(dst_ip))
 
-            # TODO: check whether it is possible to put the packet directly into the file descriptor.
             # If no entry is found, put the packet to the initial AppQueue
             if next_hop_mac is None:
                 self.app_handler_thread.send_back(packet)
@@ -469,7 +468,7 @@ class IncomingTrafficHandler(threading.Thread):
 
     # Handling incoming reward messages
     def handle_reward(self, reward_message):
-        self.reward_wait_handler.set_reward(reward_message.msg_hash, reward_message.reward_value)
+        self.reward_wait_handler.set_reward(reward_message)
 
     def quit(self):
         self.running = False
