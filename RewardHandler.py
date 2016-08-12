@@ -12,7 +12,6 @@ import time
 
 import Messages
 
-lock = threading.Lock()
 
 max_int32 = 0xFFFFFFFF
 
@@ -49,9 +48,7 @@ class RewardWaitHandler:
 
         if hash_value not in self.reward_wait_list:
             reward_wait_thread = RewardWaitThread(dst_ip, mac, self.table, self.reward_wait_list)
-            # lock.acquire()
             self.reward_wait_list.update({hash_value: reward_wait_thread})
-            # lock.release()
             # Start the thread
             reward_wait_thread.start()
 

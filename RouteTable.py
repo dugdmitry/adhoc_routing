@@ -5,15 +5,12 @@ Created on Aug 1, 2016
 @author: Dmitrii Dugaev
 """
 
-import threading
 import random
 import copy
 
 import routing_logging
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
-
-lock = threading.Lock()
 
 
 # TODO: move RL methods to separate module
@@ -144,12 +141,10 @@ class Entry(dict):
 
     # Initialize the first values for the freshly added actions
     def init_values(self):
-        # lock.acquire()
         for mac in self.local_neighbor_list:
             if mac not in self:
                 # Assign initial estimated values
                 self.update({mac: 0.0})
-        # lock.release()
 
     # Update the list of neighbors, according to a given neighbors list
     def update_neighbors(self, neighbors_list):
