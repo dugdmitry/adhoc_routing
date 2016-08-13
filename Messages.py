@@ -3,18 +3,8 @@
 Created on Oct 7, 2016
 
 @author: Dmitrii Dugaev
-"""
 
-from random import randint
-from socket import AF_INET6, inet_pton, inet_aton, inet_ntoa, inet_ntop
-from socket import error as sock_error
-from math import ceil
 
-import ctypes
-import struct
-import binascii
-
-"""
 This module describes all possible message types, which can be transmitted by the routing protocol.
 All the message types are assigned with a unique type ID and a corresponding header, which contains
 additional service information about the packet. The header is called "DSR-header" for now, since it is attached to
@@ -51,6 +41,15 @@ to select a next hop, not being completely relied on a current fixed route table
 The messages (headers) are described as CType classes with pre-defined fields, depending on a message type.
 A detailed description of the fields and its functionality can be found in the documentation.
 """
+
+from random import randint
+from socket import AF_INET6, inet_pton, inet_aton, inet_ntoa, inet_ntop
+from socket import error as sock_error
+from math import ceil
+
+import ctypes
+import struct
+import binascii
 
 
 # Define static functions for packing and unpacking the message object to and from the binary dsr header.

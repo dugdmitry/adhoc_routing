@@ -120,7 +120,7 @@ class AppHandler:
             # Broadcast it further to the network
             self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
 
-        # If next_hop_mac is None, it means that there is no current entry witch dst_ip.
+        # If next_hop_mac is None, it means that there is no current entry with dst_ip.
         # In that case, start a PathDiscovery procedure
         elif next_hop_mac is None:
 

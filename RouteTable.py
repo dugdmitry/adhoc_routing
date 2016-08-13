@@ -5,126 +5,12 @@ Created on Aug 1, 2016
 @author: Dmitrii Dugaev
 """
 
-import random
 import copy
 
+import rl_logic
 import routing_logging
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
-
-
-# TODO: move RL methods to separate module
-# Class for assigning current estimated value for a given action.
-# Provides method for returning this value.
-class ValueEstimator:
-    def __init__(self, est_method_id="sample_average"):
-        # Store current action ids and their current estimated value and step: {action_id: [est_value, step_count]}
-        self.actions = dict()
-        # Override the default method
-        if est_method_id == "sample_average":
-            self.estimate_value = self.estimate_value_by_sample_average
-            TABLE_LOG.info("An estimation method has been assigned: %s", est_method_id)
-        else:
-            TABLE_LOG.warning("INVALID ESTIMATION METHOD IS SPECIFIED!!!")
-            TABLE_LOG.info("Assigning the default estimation method...")
-            self.estimate_value = self.estimate_value_by_sample_average
-
-    def estimate_value(self):
-        """
-        Main method which returns current estimated value. It is overridden in the init().
-        Input: action_id - some action identifier; reward - value of the assigned reward.
-        Output: current estimated value.
-        """
-        pass
-
-    # Estimate value by using a simple "sample average" method.
-    # Reference to the method can be found in R.Sutton's book: Reinforcement Learning: An Introduction
-    def estimate_value_by_sample_average(self, action_id, reward):
-        if action_id not in self.actions:
-            # Assign initial values
-            self.actions.update({action_id: [0.0, 0]})
-
-        # Calculate the estimated value
-        estimated_value = (self.actions[action_id][0] * self.actions[action_id][1] + reward) \
-                          / (self.actions[action_id][1] + 1)
-        # Round it up
-        estimated_value = round(estimated_value, 2)
-        # Update the value
-        self.actions[action_id][0] = estimated_value
-        # Increment the counter
-        self.actions[action_id][1] += 1
-        # Return the value
-        return estimated_value
-
-    # Delete an action_id from the current actions list
-    def delete_action_id(self, action_id):
-        if action_id in self.actions:
-            del self.actions[action_id]
-
-
-# Class for selecting the action from the list of actions and their corresponding values.
-# The interface is provided via select_action() method.
-class ActionSelector:
-    def __init__(self, selection_method_id="greedy"):
-        # Override the default method
-        if selection_method_id == "greedy":
-            self.select_action = self.select_action_greedy
-            TABLE_LOG.info("A selection method has been assigned: %s", selection_method_id)
-
-        elif selection_method_id == "e-greedy":
-            # Set some parameters of e-greedy method
-            self.eps = 0.1
-            self.select_action = self.select_action_e_greedy
-            TABLE_LOG.info("A selection method has been assigned: %s", selection_method_id)
-
-        elif selection_method_id == "soft-max":
-            self.select_action = self.select_action_softmax
-            TABLE_LOG.info("A selection method has been assigned: %s", selection_method_id)
-
-        else:
-            TABLE_LOG.error("INVALID SELECTION METHOD IS SPECIFIED!!!")
-            TABLE_LOG.info("Assigning the default selection method...")
-            self.select_action = self.select_action_greedy
-
-    def select_action(self):
-        """
-        Default method for selecting the action. It is overridden in init().
-        Input: {action_id: value}
-        Output: action_id
-        """
-        pass
-
-    # Select an action using "greedy" algorithm
-    def select_action_greedy(self, action_values):
-        if len(action_values) == 0:
-            return None
-        # Simply return the action_id with the maximum value
-        return max(action_values, key=action_values.get)
-
-    # Select an action using "e-greedy" algorithm
-    def select_action_e_greedy(self, action_values):
-        if len(action_values) == 0:
-            return None
-        # In (eps * 100) percent of cases, select an action with maximum value (use greedy method)
-        # Otherwise, choose some other random action.
-        greedy_action_id = self.select_action_greedy(action_values)
-        if random.random() > self.eps:
-            return greedy_action_id
-        else:
-            # Randomly choose some other action
-            chosen_action_id = random.choice(action_values.keys())
-            # Check the the selected action is not the "greedy" choice
-            while action_values[chosen_action_id] == greedy_action_id and len(action_values) != 1:
-                chosen_action_id = random.choice(action_values.keys())
-            return chosen_action_id
-
-    # Select an action using "soft-max" algorithm. It is based on Gibbs (Boltzmann) distribution.
-    # See the reference in R.Sutton's book: Reinforcement Learning: An Introduction.
-    def select_action_softmax(self, action_values):
-        if len(action_values) == 0:
-            return None
-        # TODO: implement soft-max selection here.
-        pass
 
 
 # Class Entry represents a dictionary containing current estimated values for forwarding a packet to the given mac.
@@ -137,7 +23,7 @@ class Entry(dict):
         # Initialize the first values for the freshly added actions
         self.init_values()
         # Create an ValueEstimator object for keeping the updates for incoming rewards
-        self.value_estimator = ValueEstimator()
+        self.value_estimator = rl_logic.ValueEstimator()
 
     # Initialize the first values for the freshly added actions
     def init_values(self):
@@ -194,7 +80,7 @@ class Table:
         self.current_node_ips = list()
 
         # Create RL helper object, to handle the selection of the actions
-        self.action_selector = ActionSelector()
+        self.action_selector = rl_logic.ActionSelector()
 
     # This method selects a next hop for the packet with the given dst_ip.
     # The selection is being made from the current estimated values of the neighbors mac addresses,
