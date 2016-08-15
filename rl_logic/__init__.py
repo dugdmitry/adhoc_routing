@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 """
-Created on Jun 17, 2016
+Created on Aug 1, 2016
 
 @author: Dmitrii Dugaev
 
@@ -28,6 +28,7 @@ estimation values.
 """
 
 import random
+from math import e
 
 
 # Class for assigning current estimated value for a given action.
@@ -82,17 +83,21 @@ class ActionSelector:
         # Override the default method
         if selection_method_id == "greedy":
             self.select_action = self.select_action_greedy
+            self.selection_method_id = "greedy"
 
         elif selection_method_id == "e-greedy":
             # Set some parameters of e-greedy method
             self.eps = 0.1
             self.select_action = self.select_action_e_greedy
+            self.selection_method_id = "e-greedy"
 
         elif selection_method_id == "soft-max":
             self.select_action = self.select_action_softmax
+            self.selection_method_id = "soft-max"
 
         else:
             self.select_action = self.select_action_greedy
+            self.selection_method_id = "greedy"
 
     def select_action(self):
         """
@@ -131,5 +136,43 @@ class ActionSelector:
     def select_action_softmax(self, action_values):
         if len(action_values) == 0:
             return None
-        # TODO: implement soft-max selection here.
-        pass
+        # Define the temperature factor in the distribution
+        tau = 1
+
+        # Outputs a list of probabilities according to Gibbs-Boltzmann distribution and a given list of values
+        def calc_gibbs_boltzmann(values):
+            probabilities = []
+            # Calculate a denominator first, since it is constant
+            denominator = 0.0
+            for v in values:
+                denominator += pow(e, (v / tau))
+
+            # Calculate a numerator for each value, divide it by the denominator and append the result to
+            # probabilities list
+            for v in values:
+                numerator = pow(e, (v / tau))
+                probabilities.append(numerator / denominator)
+
+            return probabilities
+
+        # Returns a random item according to its weight. Items: {action: weight}
+        def weighted_choice(items):
+            weight_total = sum(items.values())
+
+            def choice(uniform=random.uniform):
+                n = uniform(0, weight_total)
+                item = None
+                for item in items:
+                    if n < items[item]:
+                        return item
+                    n = n - items[item]
+                return item
+            return choice()
+
+        # Calculate weights for each action value
+        action_weights = calc_gibbs_boltzmann(action_values.values())
+
+        # Select an action
+        action = weighted_choice(dict(zip(action_values.keys(), action_weights)))
+
+        return action

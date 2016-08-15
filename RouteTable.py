@@ -80,7 +80,8 @@ class Table:
         self.current_node_ips = list()
 
         # Create RL helper object, to handle the selection of the actions
-        self.action_selector = rl_logic.ActionSelector()
+        self.action_selector = rl_logic.ActionSelector("soft-max")
+        TABLE_LOG.info("Chosen selection method: %s", self.action_selector.selection_method_id)
 
     # This method selects a next hop for the packet with the given dst_ip.
     # The selection is being made from the current estimated values of the neighbors mac addresses,
@@ -91,6 +92,8 @@ class Table:
             self.entries_list[dst_ip].update_neighbors(self.neighbors_list)
             # Select a next hop mac
             next_hop_mac = self.action_selector.select_action(self.entries_list[dst_ip])
+            TABLE_LOG.debug("Selected next_hop: %s, from available entries: %s",
+                            next_hop_mac, self.entries_list[dst_ip])
             return next_hop_mac
         # If no such entry, return None
         else:
@@ -110,7 +113,9 @@ class Table:
     # Calculate and return the average estimated value of the given entry
     def get_avg_value(self, dst_ip):
         if dst_ip in self.entries_list:
-            return self.entries_list[dst_ip].calc_avg_value()
+            avg_value = self.entries_list[dst_ip].calc_avg_value()
+            TABLE_LOG.debug("Calculated average value towards dst_ip %s : %s", dst_ip, avg_value)
+            return avg_value
         # Else, return 0 value with the warning
         else:
             TABLE_LOG.warning("CANNOT GET AVERAGE VALUE! NO SUCH ENTRY!!! Returning 0")
@@ -120,7 +125,7 @@ class Table:
     def get_neighbors(self):
         neighbors_list = list(set(self.neighbors_list))
 
-        TABLE_LOG.debug("Got list of neighbors: %s", neighbors_list)
+        TABLE_LOG.debug("Current list of neighbors: %s", neighbors_list)
 
         return neighbors_list
 
