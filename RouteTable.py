@@ -6,11 +6,14 @@ Created on Aug 1, 2016
 """
 
 import copy
+import threading
 
 import rl_logic
 import routing_logging
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
+
+lock = threading.Lock()
 
 
 # Class Entry represents a dictionary containing current estimated values for forwarding a packet to the given mac.
@@ -138,7 +141,9 @@ class Table:
 
     # Print out the contents of the route table to a specified file
     def print_table(self):
+        lock.acquire()
         current_entries_list = copy.deepcopy(self.entries_list)
+        lock.release()
         f = open(self.table_filename, "w")
         f.write("-" * 90 + "\n")
 
