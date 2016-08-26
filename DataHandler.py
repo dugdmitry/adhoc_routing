@@ -26,12 +26,10 @@ DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_
 # Wrapping class for starting app_handler and incoming_data_handler threads
 class DataHandler:
     def __init__(self, app_transport, raw_transport, neighbor_routine, table):
-
         # Creating main thread objects
+        app_handler = AppHandler(app_transport, raw_transport, table)
 
-        self.app_handler = AppHandler(app_transport, raw_transport, table)
-
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler, neighbor_routine,
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_handler, neighbor_routine,
                                                                       raw_transport, table)
 
     # Starting the thread
