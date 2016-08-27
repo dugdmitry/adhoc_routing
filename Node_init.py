@@ -8,7 +8,6 @@ Created on Sep 25, 2014
 import DataHandler
 import RouteTable
 import Transport
-import NeighborDiscovery
 
 import sys
 import os
