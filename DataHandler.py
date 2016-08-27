@@ -8,6 +8,7 @@ Created on Oct 6, 2014
 import Messages
 import Transport
 import PathDiscovery
+import NeighborDiscovery
 import ArqHandler
 import RewardHandler
 
@@ -23,20 +24,23 @@ lock = threading.Lock()
 DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler")
 
 
-# Wrapping class for starting app_handler and incoming_data_handler threads
+# Wrapping class for starting all auxiliary handlers and threads
 class DataHandler:
-    def __init__(self, app_transport, raw_transport, neighbor_routine, table):
-        # Creating main thread objects
-        app_handler = AppHandler(app_transport, raw_transport, table)
+    def __init__(self, app_transport, raw_transport, table):
+        # Creating handlers instances
+        self.app_handler = AppHandler(app_transport, raw_transport, table)
+        # Creating handler threads
+        self.neighbor_routine = NeighborDiscovery.NeighborDiscovery(raw_transport, table)
+        self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler, self.neighbor_routine)
 
-        self.incoming_traffic_handler_thread = IncomingTrafficHandler(app_handler, neighbor_routine,
-                                                                      raw_transport, table)
-
-    # Starting the thread
+    # Starting the threads
     def run(self):
+        self.neighbor_routine.run()
         self.incoming_traffic_handler_thread.start()
 
+    # Stopping the threads
     def stop_threads(self):
+        self.neighbor_routine.stop_threads()
         self.incoming_traffic_handler_thread.quit()
 
         DATA_LOG.info("Traffic handlers are stopped")
@@ -153,7 +157,7 @@ class AppHandler:
 
 # A thread for receiving the incoming data from a real network interface.
 class IncomingTrafficHandler(threading.Thread):
-    def __init__(self, app_handler_thread, neighbor_routine, raw_transport, table):
+    def __init__(self, app_handler_thread, neighbor_routine):
         super(IncomingTrafficHandler, self).__init__()
         # Check the MONITORING_MODE_FLAG.
         # If True - override the self.handle_data_packet method for working in the monitoring mode.
@@ -165,19 +169,20 @@ class IncomingTrafficHandler(threading.Thread):
 
         self.running = True
         self.app_handler_thread = app_handler_thread
-        self.raw_transport = raw_transport
+        self.raw_transport = self.app_handler_thread.raw_transport
         self.arq_handler = app_handler_thread.arq_handler
 
         self.path_discovery_handler = app_handler_thread.path_discovery_handler
 
         self.listen_neighbors_handler = neighbor_routine.listen_neighbors_handler
-        self.table = table
+        self.table = self.app_handler_thread.table
         self.broadcast_list = app_handler_thread.broadcast_list
-        self.broadcast_mac = raw_transport.broadcast_mac
-        self.max_broadcast_ttl = 1          # Set a maximum number of hops a broadcast frame can be forwarded over
+        self.broadcast_mac = self.app_handler_thread.broadcast_mac
+        # Set a maximum number of hops a broadcast frame can be forwarded over
+        self.max_broadcast_ttl = 1
 
         # Create a handler for generating and sending back a reward to the sender node
-        self.reward_send_handler = RewardHandler.RewardSendHandler(table, raw_transport)
+        self.reward_send_handler = RewardHandler.RewardSendHandler(self.table, self.raw_transport)
         self.reward_wait_handler = app_handler_thread.reward_wait_handler
 
         self.rreq_ids = deque(maxlen=100)  # Limit the max length of the list

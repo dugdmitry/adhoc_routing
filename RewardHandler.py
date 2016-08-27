@@ -3,19 +3,8 @@
 Created on Aug 6, 2016
 
 @author: Dmitrii Dugaev
-"""
-
-import threading
-import hashlib
-import Queue
-import time
-
-import Messages
 
 
-max_int32 = 0xFFFFFFFF
-
-"""
 This module is responsible for a reward distribution between the nodes. It means both reception and transmission of
 the generated reward values, depending on current state of RouteTable entries towards a given destination L3 address.
 There are two main behaviors here.
@@ -28,6 +17,16 @@ The second is RewardSendHandler - it generates and sends back the reward to a so
 "hold on" time interval, which is needed to control a number of generated reward messages for some number of
 the received packets with the same dst_ip address.
 """
+
+import threading
+import hashlib
+import Queue
+import time
+
+import Messages
+
+
+max_int32 = 0xFFFFFFFF
 
 
 # A class which handles a reward reception for each sent packet.

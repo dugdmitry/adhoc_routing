@@ -186,10 +186,9 @@ class RoutingDaemon(Daemon):
         raw_transport = Transport.RawTransport(DEV, node_mac, topology_neighbors)
         # Create a RouteTable object
         table = RouteTable.Table(node_mac)
-        # Create a Neighbor routine thread
-        neighbor_routine = NeighborDiscovery.NeighborDiscovery(raw_transport, table)
+
         # Create data handler thread to process all incoming and outgoing messages
-        data_handler = DataHandler.DataHandler(app_transport, raw_transport, neighbor_routine, table)
+        data_handler = DataHandler.DataHandler(app_transport, raw_transport, table)
 
         # Deactivated for now
         # # Creating thread for live configuration / interaction with the running program
@@ -198,8 +197,6 @@ class RoutingDaemon(Daemon):
         try:
             # Start data handler thread
             data_handler.run()
-            # Start Neighbor Discovery procedure
-            neighbor_routine.run()
 
             # Deactivated for now
             # # Start uds_server thread
@@ -213,7 +210,6 @@ class RoutingDaemon(Daemon):
         except KeyboardInterrupt:
             # Stop the handlers
             data_handler.stop_threads()
-            neighbor_routine.stop_threads()
 
             # Deactivated for now
             # # Stop UDS server

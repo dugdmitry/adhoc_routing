@@ -3,6 +3,10 @@
 Created on Jun 8, 2016
 
 @author: Dmitrii Dugaev
+
+
+This module is responsible for sending the incoming messages (data) to the given destination address using
+a simple Stop-and-Go ARQ technique.
 """
 
 import threading
@@ -13,11 +17,6 @@ import Messages
 import routing_logging
 
 lock = threading.Lock()
-
-"""
-This module is responsible for sending the incoming messages (data) to the given destination address using
-a simple Stop-and-Go ARQ technique.
-"""
 
 ARQ_HANDLER_LOG = routing_logging.create_routing_log("routing.arq_handler.log", "arq_handler")
 
