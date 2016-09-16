@@ -33,7 +33,7 @@ class ArqHandler:
 
     # Start the ARQ send for the given message and for each destination address in the dest_list.
     # For now, only the messages with unique ID field are supported.
-    def arq_send(self, message, dest_mac_list):
+    def arq_send(self, message, dest_mac_list, payload=""):
         for dst_address in dest_mac_list:
             ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
             # Add an entry to msg_thread_map and create a ArqRoutine thread
@@ -42,15 +42,15 @@ class ArqHandler:
             hash_int = int(hash_str, 16) & max_int32
 
             lock.acquire()
-            self.msg_thread_map[hash_int] = ArqRoutine(hash_int, self.msg_thread_map,
-                                                       self.raw_transport, message, dst_address)
+            self.msg_thread_map[hash_int] = ArqRoutine(hash_int, self.msg_thread_map, self.raw_transport,
+                                                       message, payload, dst_address)
             lock.release()
             self.msg_thread_map[hash_int].start()
 
     # Start the ARQ broadcast send for the given message.
     # The message will be sent to ALL current neighbors of the node.
     # For now, only the messages with unique ID field are supported.
-    def arq_broadcast_send(self, message):
+    def arq_broadcast_send(self, message, payload=""):
         dest_mac_list = self.table.get_neighbors()
         for dst_address in dest_mac_list:
             ARQ_HANDLER_LOG.debug("ARQ_SEND for %s", dst_address)
@@ -60,8 +60,8 @@ class ArqHandler:
             hash_int = int(hash_str, 16) & max_int32
 
             lock.acquire()
-            self.msg_thread_map[hash_int] = ArqRoutine(hash_int, self.msg_thread_map,
-                                                       self.raw_transport, message, dst_address)
+            self.msg_thread_map[hash_int] = ArqRoutine(hash_int, self.msg_thread_map, self.raw_transport,
+                                                       message, payload, dst_address)
             lock.release()
             self.msg_thread_map[hash_int].start()
 
@@ -99,7 +99,7 @@ class ArqHandler:
 # A routine ARQ thread which is responsible for sending the given message/data periodically in a timeout interval,
 # if the corresponding ARQ hasn't been received yet
 class ArqRoutine(threading.Thread):
-    def __init__(self, hash_int, msg_thread_map, raw_transport, message, dst_address):
+    def __init__(self, hash_int, msg_thread_map, raw_transport, message, payload, dst_address):
         super(ArqRoutine, self).__init__()
         self.running = True
         self.hash_int = hash_int
@@ -107,6 +107,7 @@ class ArqRoutine(threading.Thread):
         self.raw_transport = raw_transport
 
         self.dsr_message = message
+        self.payload = payload
         self.dst_address = dst_address
 
         # Maximum number of retransmissions before dropping and failing the reliable transmission
@@ -135,9 +136,7 @@ class ArqRoutine(threading.Thread):
 
     # Send message (RREP or RREQ for now) with the dsr header to the dst_address
     def send_msg(self):
-
-        self.raw_transport.send_raw_frame(self.dst_address, self.dsr_message, "")
-
+        self.raw_transport.send_raw_frame(self.dst_address, self.dsr_message, self.payload)
         ARQ_HANDLER_LOG.debug("Sent raw frame on: %s", self.dst_address)
 
     def quit(self):

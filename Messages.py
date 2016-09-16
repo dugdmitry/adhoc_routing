@@ -36,6 +36,8 @@ to select a next hop, not being completely relied on a current fixed route table
 |  7   |           ACK             |        8                |       ACK service message for reliable transmission     |
 |      |                           |                         |                                                         |
 |  8   |          REWARD           |        6                |               Reward service message                    |
+|      |                           |                         |                                                         |
+|  9   |   Reliable Data Packet    |        4                |   Unicast data packet which is transmitted using ARQ    |
 ------------------------------------------------------------------------------------------------------------------------
 
 The messages (headers) are described as CType classes with pre-defined fields, depending on a message type.
@@ -94,6 +96,9 @@ def pack_message(message):
     elif isinstance(message, RewardMessage):
         return RewardHeader().pack(message)
 
+    elif isinstance(message, ReliableDataPacket):
+        return ReliableDataHeader().pack(message)
+
     else:
         return None
 
@@ -136,6 +141,9 @@ def unpack_message(binary_header):
 
     elif type_value == 8:
         return RewardHeader().unpack(binary_header)
+
+    elif type_value == 9:
+        return ReliableDataHeader().unpack(binary_header)
 
     else:
         return None
@@ -251,6 +259,20 @@ class RewardMessage:
         return out_string
 
 
+# Unicast data packet, transmitted using ARQ module
+class ReliableDataPacket:
+    type = 9
+
+    def __init__(self):
+        self.id = randint(0, 1048575)  # Max value is 2**20 (20 bits - id field size)
+        self.hop_count = 0
+
+    def __str__(self):
+        out_tuple = (self.type, self.id, self.hop_count)
+        out_string = "TYPE: %s, ID: %s, HOP_COUNT: %s" % out_tuple
+        return out_string
+
+
 #######################################################################################################################
 # ## Describe DSR headers which will pack the initial message object and return a binary string ## #
 # Unicast header
@@ -263,7 +285,6 @@ class UnicastHeader:
             ]
 
     def __init__(self):
-        # self.header = self.Header(unicast_message.type, unicast_message.id, unicast_message.hop_count)
         pass
 
     # Returns a header binary string in hex representation
@@ -731,4 +752,34 @@ class RewardHeader:
             message.id = header_unpacked.ID
 
         # Return the message and initial header byte length
+        return message, len(bytearray(header_unpacked))
+
+
+# Unicast header, transmitted reliably using ARQ
+class ReliableDataHeader:
+    class Header(ctypes.LittleEndianStructure):
+        _fields_ = [
+                ("TYPE", ctypes.c_uint32, 4),
+                ("ID", ctypes.c_uint32, 20),
+                ("HOP_COUNT", ctypes.c_uint32, 8)
+            ]
+
+    def __init__(self):
+        pass
+
+    # Returns a header binary string in hex representation
+    def pack(self, reliable_data_packet):
+        header = self.Header(reliable_data_packet.type, reliable_data_packet.id, reliable_data_packet.hop_count)
+        # Return the array in byte representation
+        return bytearray(header)
+
+    # Returns a message object, created from the binary data
+    def unpack(self, binary_header):
+        # Cast the byte_array into the structure
+        header_unpacked = self.Header.from_buffer_copy(binary_header)
+        # Get values and create message object and fill up the fields
+        message = ReliableDataPacket()
+        message.id = header_unpacked.ID
+        message.hop_count = header_unpacked.HOP_COUNT
+        # Return the message
         return message, len(bytearray(header_unpacked))

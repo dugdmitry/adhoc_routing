@@ -34,6 +34,10 @@ SIOCGIFADDR = 0x8915
 IP4_ID = 0x0800
 IP6_ID = 0x86DD
 
+# Define protocols ID list over IP layer, according to the RFCs:
+# https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
+PROTOCOL_IDS = {"ICMP4": 1, "ICMP6": 58, "TCP": 6, "UDP": 17}
+
 
 # Define a static function which will return a mac address from the given network interface name
 def get_mac(interface_name):
@@ -125,14 +129,14 @@ def get_l3_addresses_from_packet(packet):
     # For more info, see: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
     l3_id = struct.unpack("!H", packet[2:4])[0]
 
-    TRANSPORT_LOG.debug("L3 PROTO ID: %s", hex(l3_id))
-
     if l3_id == int(IP4_ID):
         addresses = get_data_from_ipv4_header(packet)
         return addresses[0], addresses[1], packet
+
     elif l3_id == int(IP6_ID):
         addresses = get_data_from_ipv6_header(packet)
         return addresses[0], addresses[1], packet
+
     # If the ID is 0, it means that the packet has been sent back to tun interface again, using raw socket.
     # So, the tun driver set the ID to 0, since it was the pure raw data, sent via raw socket.
     elif l3_id == 0:
@@ -141,6 +145,90 @@ def get_l3_addresses_from_packet(packet):
 
     else:
         # The packet has UNSUPPORTED L3 protocol, drop it
+        TRANSPORT_LOG.error("The packet has UNSUPPORTED L3 protocol, dropping the packet")
+        return None
+
+
+# Define a static function which will return upper protocol ID and port number (if any) of the given packet.
+# For now, only IPv4 and IPv6 protocols are supported on L3 layer, and UDP, TCP and ICMP on the upper level.
+def get_upper_proto_info(packet):
+    def get_proto_id_from_ipv4(ipv4_packet):
+        return struct.unpack("!B", ipv4_packet[13])[0]
+
+    def get_proto_id_from_ipv6(ipv6_packet):
+        return struct.unpack("!B", ipv6_packet[10])[0]
+
+    # Gets "upper_data" - a sliced packet without L3 header - outputs a destination port number of UDP
+    def get_port_from_udp(udp_upper_data):
+        return struct.unpack("!H", udp_upper_data[2:4])[0]
+
+    # Gets "upper_data" - a sliced packet without L3 header - outputs a destination port number of TCP
+    def get_port_from_tcp(tcp_upper_data):
+        return struct.unpack("!H", tcp_upper_data[2:4])[0]
+
+    # Get L3 protocol identifier. This is the L3 ID which is being prepended to every packet,
+    # sent to virtual tun interface (packet information flag, IFF_NO_PI set to False, by default).
+    # For more info, see: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
+    l3_id = struct.unpack("!H", packet[2:4])[0]
+
+    if l3_id == int(IP4_ID):
+        proto_id = int(get_proto_id_from_ipv4(packet))
+
+        if proto_id == PROTOCOL_IDS["UDP"]:
+            # Get the IHL value in order to slice the packet from the IPv4 header
+            ihl = int(struct.unpack("!B", packet[4])[0]) & 0xf
+            upper_data = packet[4 + ihl * 4:]
+            return "UDP", int(get_port_from_udp(upper_data))
+
+        elif proto_id == PROTOCOL_IDS["TCP"]:
+            # Get the IHL value in order to slice the packet from the IPv4 header
+            ihl = int(struct.unpack("!B", packet[4])[0]) & 0xf
+            upper_data = packet[4 + ihl * 4:]
+            return "TCP", int(get_port_from_tcp(upper_data))
+
+        elif proto_id == PROTOCOL_IDS["ICMP4"]:
+            # Return 0 as port number
+            return "ICMP4", 0
+
+        else:
+            # Unknown protocol id, return 0 as port number
+            TRANSPORT_LOG.warning("Unknown upper protocol id: %s", proto_id)
+            return "UNKNOWN", 0
+
+    elif l3_id == int(IP6_ID):
+        proto_id = int(get_proto_id_from_ipv6(packet))
+
+        if proto_id == PROTOCOL_IDS["UDP"]:
+            # IHL value in IPv6 is fixed and equal to 40 octets (10 x 32-bit words)
+            ihl = 10
+            upper_data = packet[4 + ihl * 4:]
+            return "UDP", int(get_port_from_udp(upper_data))
+
+        elif proto_id == PROTOCOL_IDS["TCP"]:
+            # IHL value in IPv6 is fixed and equal to 40 octets (10 x 32-bit words)
+            ihl = 10
+            upper_data = packet[4 + ihl * 4:]
+            return "TCP", int(get_port_from_tcp(upper_data))
+
+        elif proto_id == PROTOCOL_IDS["ICMP6"]:
+            # Return 0 as port number
+            return "ICMP6", 0
+
+        else:
+            # Unknown protocol id, return 0 as port number
+            TRANSPORT_LOG.warning("Unknown upper protocol id: %s", proto_id)
+            return "UNKNOWN", 0
+
+    # If the ID is 0, it means that the packet has been sent back to tun interface again, using raw socket.
+    # So, the tun driver set the ID to 0, since it was the pure raw data, sent via raw socket.
+    # # This code should never be executed, since the function is called always after the packet has been checked.
+    elif l3_id == 0:
+        # So, remove the first 4 bytes and get the L3 addresses again,
+        return get_upper_proto_info(packet[4:])
+
+    else:
+        # The packet has UNSUPPORTED L3 protocol, drop it.
+        # This code should never be executed, since the function is called always after the packet has been checked
         TRANSPORT_LOG.error("The packet has UNSUPPORTED L3 protocol, dropping the packet")
         return None
 
@@ -206,7 +294,6 @@ class UdsServer(threading.Thread):
         
     def quit(self):
         self.running = False
-        # self._Thread__stop()
         self.sock.close()
         # Removing the uds socket
         subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)

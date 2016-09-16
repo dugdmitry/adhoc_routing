@@ -16,7 +16,7 @@ import threading
 from collections import deque
 
 import routing_logging
-from conf import MONITORING_MODE_FLAG
+from conf import MONITORING_MODE_FLAG, ARQ_LIST
 
 lock = threading.Lock()
 
@@ -71,16 +71,19 @@ class AppHandler:
 
     def process_packet(self, packet):
         # Get the src_ip and dst_ip from the packet
-        src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
+        try:
+            src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
+        except TypeError:
+            DATA_LOG.error("The packet has UNSUPPORTED L3 protocol! Dropping the packet...")
+            return 1
 
-        # Try to find a mac address of the next hop where a packet should be forwarded to
+        # Try to find a mac address of the next hop where the packet should be forwarded to
         next_hop_mac = self.table.get_next_hop_mac(dst_ip)
 
         # Check if the packet's destination address is IPv6 multicast
         # Always starts from "ff0X::",
         # see https://en.wikipedia.org/wiki/IPv6_address#Multicast_addresses
         if dst_ip[:2] == "ff":
-
             DATA_LOG.info("Multicast IPv6: %s", dst_ip)
 
             # Create a broadcast dsr message
@@ -125,26 +128,42 @@ class AppHandler:
         # If next_hop_mac is None, it means that there is no current entry with dst_ip.
         # In that case, start a PathDiscovery procedure
         elif next_hop_mac is None:
-
             DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
 
             # ## Initiate PathDiscovery procedure for the given packet ## #
             self.path_discovery_handler.run_path_discovery(src_ip, dst_ip, packet)
 
         # Else, the packet is unicast, and has the corresponding Entry.
-        # Forward packet to the next hop. Start a thread wor waiting an ACK with reward.
+        # Check if the packet should be transmitted using ARQ.
+        # Forward packet to the next hop. Start a thread for waiting an ACK with reward.
         else:
-
             DATA_LOG.debug("For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
 
-            # Create a unicast dsr message with proper values
-            dsr_message = Messages.UnicastPacket()
-            dsr_message.hop_count = 1
+            # Check if the packet should be transmitted reliably
+            upper_proto, port_number = Transport.get_upper_proto_info(packet)
+            if (upper_proto in ARQ_LIST) and (port_number in ARQ_LIST[upper_proto]):
+                # Transmit the packet reliably
+                DATA_LOG.debug("This packet should be transmitted reliably: %s, %s", upper_proto, port_number)
 
-            # Send the raw data with dsr_header to the next hop
-            self.raw_transport.send_raw_frame(next_hop_mac, dsr_message, packet)
-            # Process the packet through the reward_wait_handler
-            self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
+                # Create reliable dsr data message with proper values
+                dsr_message = Messages.ReliableDataPacket()
+                dsr_message.hop_count = 1
+
+                # Send the message using ARQ
+                self.arq_handler.arq_send(dsr_message, [next_hop_mac], payload=packet)
+                # Process the packet through the reward_wait_handler
+                self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
+
+            # Else, transmit the data packet normally
+            else:
+                # Create a unicast dsr message with proper values
+                dsr_message = Messages.UnicastPacket()
+                dsr_message.hop_count = 1
+
+                # Send the raw data with dsr_header to the next hop
+                self.raw_transport.send_raw_frame(next_hop_mac, dsr_message, packet)
+                # Process the packet through the reward_wait_handler
+                self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
 
     # Send the packet back to the virtual network interface
     def send_back(self, packet):
@@ -155,15 +174,17 @@ class AppHandler:
         self.app_transport.send_to_app(packet)
 
 
-# A thread for receiving the incoming data from a real network interface.
+# A thread for receiving an incoming data from the real network interface.
 class IncomingTrafficHandler(threading.Thread):
     def __init__(self, app_handler_thread, neighbor_routine):
         super(IncomingTrafficHandler, self).__init__()
         # Check the MONITORING_MODE_FLAG.
         # If True - override the self.handle_data_packet method for working in the monitoring mode.
+        # If True - override the self.handle_reliable_data_packet method for working in the monitoring mode.
         # If True - override the self.rreq_handler and self.rrep_handler methods for working in the monitoring mode.
         if MONITORING_MODE_FLAG:
             self.handle_data_packet = self.handle_data_packet_monitoring_mode
+            self.handle_reliable_data_packet = self.handle_reliable_data_packet_monitoring_mode
             self.handle_rreq = self.handle_rreq_monitoring_mode
             self.handle_rrep = self.handle_rrep_monitoring_mode
 
@@ -185,14 +206,13 @@ class IncomingTrafficHandler(threading.Thread):
         self.reward_send_handler = RewardHandler.RewardSendHandler(self.table, self.raw_transport)
         self.reward_wait_handler = app_handler_thread.reward_wait_handler
 
-        self.rreq_ids = deque(maxlen=100)  # Limit the max length of the list
-        self.rrep_ids = deque(maxlen=100)  # Limit the max length of the list
+        self.rreq_ids = deque(maxlen=100)                       # Limit the max length of the list
+        self.rrep_ids = deque(maxlen=100)                       # Limit the max length of the list
+        self.reliable_packet_ids = deque(maxlen=100)            # Limit the max length of the list
 
     def run(self):
         while self.running:
-
             src_mac, dsr_message, packet = self.raw_transport.recv_data()
-
             dsr_type = dsr_message.type
 
             # If it's a data packet, handle it accordingly
@@ -225,6 +245,13 @@ class IncomingTrafficHandler(threading.Thread):
                 DATA_LOG.debug("Got REWARD service message: %s", str(dsr_message))
                 self.handle_reward(dsr_message)
 
+            elif dsr_type == 9:
+                DATA_LOG.debug("Got reliable data packet: %s", str(dsr_message))
+                self.handle_reliable_data_packet(src_mac, dsr_message, packet)
+
+            else:
+                DATA_LOG.error("INVALID DSR TYPE NUMBER HAS BEEN RECEIVED!!!")
+
     # Check the dst_mac from dsr_header. If it matches the node's own mac -> send it up to the virtual interface
     # If the packet carries the data, either send it to the next hop, or,
     # if there is no such one, put it to the AppQueue, or,
@@ -238,9 +265,7 @@ class IncomingTrafficHandler(threading.Thread):
 
         # If the dst_ip matches the node's ip, send data to the App
         if dst_ip in self.table.current_node_ips:
-
-            DATA_LOG.debug("Sending packet with to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
-
+            DATA_LOG.debug("Sending packet to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
             self.app_handler_thread.send_up(packet)
 
         # Else, try to find the next hop in the route table
@@ -273,9 +298,79 @@ class IncomingTrafficHandler(threading.Thread):
 
         # If the dst_ip matches the node's ip, send data to the App
         if dst_ip in self.table.current_node_ips:
+            DATA_LOG.debug("Sending packet to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
+            self.app_handler_thread.send_up(packet)
 
-            DATA_LOG.debug("Sending packet with to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
+        # In all other cases, discard the packet
+        else:
+            DATA_LOG.debug("This data packet is not for me. Discarding the data packet, "
+                           "since in Monitoring Mode. Dsr header: %s", dsr_message)
 
+    # Handle data packet, sent via ARQ
+    def handle_reliable_data_packet(self, src_mac, dsr_message, packet):
+        # Send back the ACK on the received packet in ALL cases
+        self.arq_handler.send_ack(dsr_message, src_mac)
+
+        if dsr_message.id in self.reliable_packet_ids:
+            # Send the ACK back anyway, but do nothing with the message itself
+            DATA_LOG.info("The Data Packet with this ID has been already processed. Sending the ACK back.")
+
+            return 0
+
+        self.reliable_packet_ids.append(dsr_message.id)
+
+        # Get src_ip, dst_ip from the incoming packet
+        src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
+
+        # Generate and send back a reward message
+        self.reward_send_handler.send_reward(dst_ip, src_mac)
+
+        # If the dst_ip matches the node's ip, send data to the App
+        if dst_ip in self.table.current_node_ips:
+            DATA_LOG.debug("Sending packet to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
+            self.app_handler_thread.send_up(packet)
+
+        # Else, try to find the next hop in the route table
+        else:
+            next_hop_mac = self.table.get_next_hop_mac(dst_ip)
+            DATA_LOG.debug("IncomingTraffic: For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
+            DATA_LOG.debug("Current entry: %s", self.table.get_entry(dst_ip))
+
+            # If no entry is found, put the packet to the initial AppQueue
+            if next_hop_mac is None:
+                self.app_handler_thread.send_back(packet)
+
+            # Else, forward the packet to the next_hop. Start a reward wait thread, if necessary.
+            else:
+                dsr_message.hop_count += 1
+                # Send the raw data with dsr_header to the next hop using ARQ
+                self.arq_handler.arq_send(dsr_message, [next_hop_mac], payload=packet)
+
+                # Process the packet through the reward_wait_handler
+                self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
+
+    # Handle data packet, sent via ARQ
+    def handle_reliable_data_packet_monitoring_mode(self, src_mac, dsr_message, packet):
+        # Send back the ACK on the received packet in ALL cases
+        self.arq_handler.send_ack(dsr_message, src_mac)
+
+        if dsr_message.id in self.reliable_packet_ids:
+            # Send the ACK back anyway, but do nothing with the message itself
+            DATA_LOG.info("The Data Packet with this ID has been already processed. Sending the ACK back.")
+
+            return 0
+
+        self.reliable_packet_ids.append(dsr_message.id)
+
+        # Get src_ip, dst_ip from the incoming packet
+        src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
+
+        # Generate and send back a reward message
+        self.reward_send_handler.send_reward(dst_ip, src_mac)
+
+        # If the dst_ip matches the node's ip, send data to the App
+        if dst_ip in self.table.current_node_ips:
+            DATA_LOG.debug("Sending packet to the App... SRC_IP: %s, DST_IP: %s", src_ip, dst_ip)
             self.app_handler_thread.send_up(packet)
 
         # In all other cases, discard the packet

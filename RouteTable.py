@@ -138,8 +138,6 @@ class Table:
 
     # Print out the contents of the route table to a specified file
     def print_table(self):
-
-        # current_entries_list = copy.deepcopy(self.entries_list)
         current_keys = self.entries_list.keys()
         current_values = self.entries_list.values()
 
