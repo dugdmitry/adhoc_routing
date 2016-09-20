@@ -8,9 +8,7 @@ Created on Sep 25, 2014
 import DataHandler
 import RouteTable
 import Transport
-import NeighborDiscovery
 
-import Queue
 import sys
 import os
 import time
@@ -18,7 +16,7 @@ import atexit
 from signal import SIGINT, SIGTERM
 
 # Get DEV name from the default configuration file
-from conf import DEV, UDS_ADDRESS, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
+from conf import DEV, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
 # Import module for handling the logging
 import routing_logging
 
@@ -92,11 +90,11 @@ class Daemon:
         os.dup2(se.fileno(), sys.stderr.fileno())
 
         # write pidfile
-        atexit.register(self.delpid)
+        atexit.register(self.del_pid)
         pid = str(os.getpid())
         file(self.pidfile, 'w+').write("%s\n" % pid)
 
-    def delpid(self):
+    def del_pid(self):
         os.remove(self.pidfile)
 
     def start(self):
@@ -178,52 +176,51 @@ class RoutingDaemon(Daemon):
         ROUTING_LOG.info("Running the routing instance...")
 
         # Get mac address of the network interface
-        node_mac = self.get_mac(DEV)
-        # Creating a transport for communication with a virtual interface
-        app_transport = Transport.VirtualTransport()
+        node_mac = Transport.get_mac(DEV)
         # Creating a raw_transport object for sending DSR-like packets over the given interface
         topology_neighbors = self.get_topology_neighbors(node_mac)
+        # Creating a transport for communication with a virtual interface
+        app_transport = Transport.VirtualTransport()
+        # Creating a transport for communication with network physical interface
         raw_transport = Transport.RawTransport(DEV, node_mac, topology_neighbors)
         # Create a RouteTable object
         table = RouteTable.Table(node_mac)
-        # Create a queue for in coming app data
-        app_queue = Queue.Queue()
-        # Creating a queue for handling HELLO messages from the NeighborDiscovery
-        hello_msg_queue = Queue.Queue()
-        # Create a Neighbor routine thread
-        neighbor_routine = NeighborDiscovery.NeighborDiscovery(node_mac, app_transport,
-                                                               raw_transport, table, hello_msg_queue)
-        # Create app_data handler thread
-        data_handler = DataHandler.DataHandler(app_transport, app_queue, hello_msg_queue, raw_transport, table)
-        # Creating thread for live configuration / interaction with the running program
-        uds_server = Transport.UdsServer(UDS_ADDRESS)
+
+        # Create data handler thread to process all incoming and outgoing messages
+        data_handler = DataHandler.DataHandler(app_transport, raw_transport, table)
+
+        # Deactivated for now
+        # # Creating thread for live configuration / interaction with the running program
+        # uds_server = Transport.UdsServer(UDS_ADDRESS)
 
         try:
-            # Start app_data thread
+            # Start data handler thread
             data_handler.run()
-            # Start Neighbor Discovery procedure
-            neighbor_routine.run()
-            # Start uds_server thread
-            uds_server.start()
+
+            # Deactivated for now
+            # # Start uds_server thread
+            # uds_server.start()
 
             while True:
-                output = app_transport.recv_from_app()
-                app_queue.put(output)
+                packet = app_transport.recv_from_app()
+                data_handler.app_handler.process_packet(packet)
 
         # Catch SIGINT signal, raised by the daemon
         except KeyboardInterrupt:
             # Stop the handlers
             data_handler.stop_threads()
-            neighbor_routine.stop_threads()
-            # Stop UDS server
-            uds_server.quit()
-            # Stop the log thread
+
+            # Deactivated for now
+            # # Stop UDS server
+            # uds_server.quit()
+
+            # # Stop the log thread
             routing_logging.stop_log_thread()
 
         return 0
 
     # Get the topology neighbors of a given node from the topology_list.
-    # It is needed for correct filtering the broadcast frames sent via raw sockets
+    # It is needed for correct filtering the broadcast frames sent via raw sockets.
     def get_topology_neighbors(self, node_mac):
         # Open a default topology file, if it exists
         try:
@@ -245,14 +242,6 @@ class RoutingDaemon(Daemon):
 
         # If nothing was found, return an empty list
         return list()
-            
-    def get_mac(self, interface):
-        # Return the MAC address of interface
-        try:
-            string = open('/sys/class/net/%s/address' % interface).readline()
-        except:
-            string = "00:00:00:00:00:00"
-        return string[:17]
 
 
 if __name__ == "__main__":

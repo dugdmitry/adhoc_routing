@@ -1,189 +1,162 @@
 #!/usr/bin/python
 """
-Created on Sep 30, 2014
+Created on Aug 1, 2016
 
 @author: Dmitrii Dugaev
 """
 
-from time import time
+import copy
 
+import rl_logic
 import routing_logging
 
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
 
 
-class Entry:
-    def __init__(self, dst_mac, next_hop_mac, n_hops):
-        self.dst_mac = dst_mac                                  # MAC address of destination node
-        self.next_hop_mac = next_hop_mac                        # Next hop mac address
-        self.n_hops = n_hops                                    # Number of hops to destination
-        self.last_activity = time()                             # Timestamp of the last activity
-        self.timeout = 120                                      # Timeout in seconds upon deleting an entry
+# Class Entry represents a dictionary containing current estimated values for forwarding a packet to the given mac.
+class Entry(dict):
+    def __init__(self, dst_ip, neighbors_list):
+        super(Entry, self).__init__()
+        self.dst_ip = dst_ip
+        # Store a copy of the initial neighbors_list
+        self.local_neighbor_list = copy.deepcopy(neighbors_list)
+        # Initialize the first values for the freshly added actions
+        self.init_values()
+        # Create an ValueEstimator object for keeping the updates for incoming rewards
+        self.value_estimator = rl_logic.ValueEstimator()
 
-    def __eq__(self, other):
-        return (self.dst_mac == other.dst_mac and
-                self.next_hop_mac == other.next_hop_mac and self.n_hops == other.n_hops)
+    # Initialize the first values for the freshly added actions
+    def init_values(self):
+        for mac in self.local_neighbor_list:
+            if mac not in self:
+                # Assign initial estimated values
+                self.update({mac: 0.0})
 
-    def __str__(self):
-        out_tuple = (str(self.dst_mac), str(self.next_hop_mac),
-                     str(self.n_hops), str(round((time() - self.last_activity), 2)))
-        out_string = "DST_MAC: %s, NEXT_HOP_MAC: %s, N_HOPS: %s, IDLE_TIME: %s" % out_tuple
+    # Update the list of neighbors, according to a given neighbors list
+    def update_neighbors(self, neighbors_list):
+        if self.local_neighbor_list == neighbors_list:
+            pass
+        else:
+            # Merge the old list with the given one
+            self.local_neighbor_list.update(neighbors_list)
+            # Delete the old keys
+            keys_to_delete = set(self.local_neighbor_list) - set(neighbors_list)
+            for key in keys_to_delete:
+                # Delete a key
+                del self.local_neighbor_list[key]
+                # Delete a corresponding estimated value from the ValueEstimator object
+                self.value_estimator.delete_action_id(key)
 
-        return out_string
+            # Initialize the est_values for new macs
+            self.init_values()
+
+    # Update estimated value on the action (mac) by the given reward
+    def update_value(self, mac, reward):
+        # Estimate the value and update the entry itself
+        self[mac] = self.value_estimator.estimate_value(mac, reward)
+
+    # Calculate and output the average of estimation values of itself
+    def calc_avg_value(self):
+        return sum(self.values()) / len(self)
 
 
+# A class of route table. Contains a list and methods for manipulating the entries and its values, which correspond to
+# different src-dst pairs (routes).
 class Table:
     def __init__(self, node_mac):
-        self.entries = {}             # List of entries
-        self.arp_table = {}           # A dictionary which maps current IP addresses with the devices' MAC addresses
+        # Define a filename to write the table to
+        self.table_filename = "table.txt"
+
         self.node_mac = node_mac
-        
-    # Add an entry to the route table and the arp_table
-    def add_entry(self, dst_mac, next_hop_mac, n_hops):
 
-        # Create new route entry object
-        entry = Entry(dst_mac, next_hop_mac, n_hops)
-        if dst_mac in self.entries:
-            # Check if the identical entry already exists in the table
-            for ent in self.entries[dst_mac]:
-                # If yes, just refresh its last_activity time and return it
-                if ent == entry:
-                    ent.last_activity = time()
-                    return ent
-            
-            self.entries[dst_mac].append(entry)
-            
+        # Define a shared dictionary of current active neighbors. This dictionary is also used by the
+        # ListenNeighbors class from the NeighborDiscovery module. Format: {mac: neighbor_object}
+        self.neighbors_list = dict()
+
+        # Define list of current route entries. Format: {dst_ip: Entry}
+        self.entries_list = dict()
+
+        # Store current ip addresses assigned to this node
+        self.current_node_ips = list()
+
+        # Create RL helper object, to handle the selection of the actions
+        self.action_selector = rl_logic.ActionSelector("soft-max")
+        TABLE_LOG.info("Chosen selection method: %s", self.action_selector.selection_method_id)
+
+    # This method selects a next hop for the packet with the given dst_ip.
+    # The selection is being made from the current estimated values of the neighbors mac addresses,
+    # using some of the available action selection algorithms - such as greedy, e-greedy, soft-max and so on.
+    def get_next_hop_mac(self, dst_ip):
+        if dst_ip in self.entries_list:
+            # Update the neighbors and corresponding action values
+            self.entries_list[dst_ip].update_neighbors(self.neighbors_list)
+            # Select a next hop mac
+            next_hop_mac = self.action_selector.select_action(self.entries_list[dst_ip])
+            TABLE_LOG.debug("Selected next_hop: %s, from available entries: %s",
+                            next_hop_mac, self.entries_list[dst_ip])
+            return next_hop_mac
+        # If no such entry, return None
         else:
-            self.entries[dst_mac] = [entry]
+            return None
 
-            TABLE_LOG.info("New entry has been added. Table updated.")
+    # Update the estimation value of the given action_id (mac) by the given reward
+    def update_entry(self, dst_ip, mac, reward):
+        if dst_ip in self.entries_list:
+            self.entries_list[dst_ip].update_value(mac, reward)
+        else:
+            TABLE_LOG.info("No such Entry to update. Creating and updating a new entry for dst_ip and mac: %s - %s",
+                           dst_ip, mac)
 
-            self.print_table()
+            self.entries_list.update({dst_ip: Entry(dst_ip, self.neighbors_list)})
+            self.entries_list[dst_ip].update_value(mac, reward)
 
-        return entry
-
-    def update_arp_table(self, ip, mac):
-
-        self.arp_table.update({ip: mac})
-
-    # Delete all entries where next_hop_mac matches the given mac
-    def del_entries(self, mac):
-
-        entries_to_delete = {}
-        for dst_mac in self.entries:
-            entries_to_delete.update({dst_mac: []})
-
-            for entry in self.entries[dst_mac]:
-                if entry.next_hop_mac == mac:
-                    entries_to_delete[dst_mac].append(entry)
-
-        # Deleting chosen entries from the list of entries with current dst_mac
-        for dst_mac in entries_to_delete:
-            for ent in entries_to_delete[dst_mac]:
-                self.entries[dst_mac].remove(ent)
-            # Check if that was the last existing entry. If yes -> delete the key from the dictionary
-            if self.entries[dst_mac] == []:
-                del self.entries[dst_mac]
-
-        TABLE_LOG.info("All entries with given next_hop_mac have been removed. Table updated.")
-
-        self.print_table()
+    # Calculate and return the average estimated value of the given entry
+    def get_avg_value(self, dst_ip):
+        if dst_ip in self.entries_list:
+            avg_value = self.entries_list[dst_ip].calc_avg_value()
+            TABLE_LOG.debug("Calculated average value towards dst_ip %s : %s", dst_ip, avg_value)
+            return avg_value
+        # Else, return 0 value with the warning
+        else:
+            TABLE_LOG.warning("CANNOT GET AVERAGE VALUE! NO SUCH ENTRY!!! Returning 0")
+            return 0.0
 
     # Return the current list of neighbors
     def get_neighbors(self):
-        neighbors_list = []
-        for dst_mac in self.entries:
-            for entry in self.entries[dst_mac]:
-                if entry.n_hops == 1:
-                    neighbors_list.append(entry.next_hop_mac)
+        neighbors_list = list(set(self.neighbors_list))
 
-        TABLE_LOG.info("Got list of neighbors: %s", neighbors_list)
+        TABLE_LOG.debug("Current list of neighbors: %s", neighbors_list)
 
         return neighbors_list
 
-    # Print all entries of the route table to a file
+    # Return current entry assigned for given dst_ip
+    def get_entry(self, dst_ip):
+        if dst_ip in self.entries_list:
+            return self.entries_list[dst_ip]
+        else:
+            return None
+
+    # Print out the contents of the route table to a specified file
     def print_table(self):
-        f = open("table.txt", "w")
+        current_keys = self.entries_list.keys()
+        current_values = self.entries_list.values()
+
+        while len(current_keys) != len(current_values):
+            current_keys = self.entries_list.keys()
+            current_values = self.entries_list.values()
+
+        current_entries_list = dict(zip(current_keys, current_values))
+
+        f = open(self.table_filename, "w")
         f.write("-" * 90 + "\n")
 
-        for dst_mac in self.entries:
-            f.write("Towards destination MAC: %s \n" % dst_mac)
-            f.write("<Dest_MAC> \t\t <Next_hop_MAC> \t\t <Hop_count> \t <IDLE Time>\n")
-            for entry in self.entries[dst_mac]:
-                string = "%s \t %s \t\t\t %s \t %s\n"
-                values = (entry.dst_mac, entry.next_hop_mac, entry.n_hops,
-                          str(round((time() - entry.last_activity), 2)))
+        for dst_ip in current_entries_list:
+            f.write("Towards destination IP: %s \n" % dst_ip)
+            f.write("<Next_hop_MAC> \t\t <Value>\n")
+            for mac in current_entries_list[dst_ip]:
+                string = "%s \t %s \n"
+                values = (mac, current_entries_list[dst_ip][mac])
                 f.write(string % values)
             f.write("\n")
-
         f.write("-" * 90 + "\n")
-
-    def print_entry(self, entry):
-        TABLE_LOG.info("<Dest_MAC>: %s, <Next_hop_MAC>: %s, <Hop_count>: %s, <IDLE Time>: %s",
-                       entry.dst_mac, entry.next_hop_mac, entry.n_hops, round((time() - entry.last_activity), 2))
-
-    # Returns an entry with a given dest_ip and ID
-    def get_entry_by_ID(self, dest_ip, ID):
-        IDs = []
-
-        if dest_ip in self.entries:
-            for d in self.entries[dest_ip]:
-                IDs.append(d.id)
-
-        output_list = self.entries[dest_ip][IDs.index(ID)]
-
-        return output_list
-
-    # Check the dst_ip in arp_table and in the route_table
-    def lookup_mac_address(self, dst_ip):
-        # Check the arp table
-        if dst_ip in self.arp_table:
-            output = self.arp_table[dst_ip]
-        else:
-            output = None
-
-        return output
-    
-    def lookup_entry(self, dst_mac):
-        if dst_mac == None:
-            return None
-
-        if dst_mac in self.entries:
-            # Checking the age of the route entry
-            self.check_expiry(dst_mac)
-            output = self.select_route(dst_mac)
-        else:
-            output = None
-
-        return output
-    
-    # Returns an entry with min amount of hops to the destination MAC address
-    def select_route(self, dst_mac):
-        hop_counts = []
-        if dst_mac in self.entries:
-            for a in self.entries[dst_mac]:
-                hop_counts.append(a.n_hops)
-                
-            entry = self.entries[dst_mac][hop_counts.index(min(hop_counts))]
-            entry.last_activity = time()
-            return entry
-        else:
-            return None
-
-    # Check the entry's last activity. If it exceeds the timeout, then delete it.
-    def check_expiry(self, dst_mac):
-        entries_to_delete = []
-        if dst_mac in self.entries:
-            for ent in self.entries[dst_mac]:
-                if ((time() - ent.last_activity) > ent.timeout) and ent.n_hops != 1:
-                    entries_to_delete.append(ent)
-            for ent in entries_to_delete:
-                self.entries[dst_mac].remove(ent)
-            # If the list becomes empty, then delete it
-            if self.entries[dst_mac] == []:
-                del self.entries[dst_mac]
-
-            self.print_table()
-
-        else:
-            TABLE_LOG.warning("This should never happen: RouteTable.check_expiry(dst_mac)")
+        f.close()
