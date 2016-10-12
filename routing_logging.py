@@ -80,11 +80,11 @@ class LogWrapper:
 # Create and output a logger wrap object which will be sending the logging messages to a single log thread
 def create_routing_log(log_name, log_hierarchy):
     # Create log directory, if it's not been created already
-    if not os.path.exists(ABSOLUTE_PATH + "logs/"):
-        os.makedirs(ABSOLUTE_PATH + "logs/")
+    if not os.path.exists(ABSOLUTE_PATH + "/logs/"):
+        os.makedirs(ABSOLUTE_PATH + "/logs/")
 
     log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-    log_file = ABSOLUTE_PATH + "logs/" + log_name
+    log_file = ABSOLUTE_PATH + "/logs/" + log_name
     log_handler = RotatingFileHandler(log_file, mode='a', maxBytes=5*1024*1024,
                                       backupCount=10, encoding=None, delay=0)
 
