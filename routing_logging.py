@@ -10,8 +10,11 @@ import Queue
 import logging
 from logging.handlers import RotatingFileHandler
 from conf import LOG_LEVEL
-ABSOLUTE_PATH = os.path.dirname(os.path.abspath(__file__))
 
+# Define an absolute path to the program's directory
+ABSOLUTE_PATH = os.path.dirname(os.path.abspath(__file__))
+# Define a default path to log directory
+PATH_TO_LOGS = "/var/log/adhoc_routing/"
 # Define a global queue for receiving the methods from the Logger objects and its arguments
 LOG_QUEUE = Queue.Queue()
 
@@ -80,11 +83,11 @@ class LogWrapper:
 # Create and output a logger wrap object which will be sending the logging messages to a single log thread
 def create_routing_log(log_name, log_hierarchy):
     # Create log directory, if it's not been created already
-    if not os.path.exists(ABSOLUTE_PATH + "/logs/"):
-        os.makedirs(ABSOLUTE_PATH + "/logs/")
+    if not os.path.exists(PATH_TO_LOGS):
+        os.makedirs(PATH_TO_LOGS)
 
     log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-    log_file = ABSOLUTE_PATH + "/logs/" + log_name
+    log_file = PATH_TO_LOGS + log_name
     log_handler = RotatingFileHandler(log_file, mode='a', maxBytes=5*1024*1024,
                                       backupCount=10, encoding=None, delay=0)
 
