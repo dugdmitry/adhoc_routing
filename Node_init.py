@@ -16,7 +16,8 @@ import atexit
 from signal import SIGINT, SIGTERM
 
 # Get DEV name from the default configuration file
-from conf import DEV, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
+# from conf import DEV, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
+from conf import DEV, SET_TOPOLOGY_FLAG
 # Import module for handling the logging
 import routing_logging
 
@@ -25,7 +26,8 @@ import routing_logging
 REDIRECT_TO = "/tmp/routing_output.log"
 PIDFILE_PATH = "/tmp/routing_daemon.pid"
 # Path to a topology configuration
-TOPOLOGY_PATH = ABSOLUTE_PATH + "topology.conf"
+ABSOLUTE_PATH = os.getcwd()
+TOPOLOGY_PATH = ABSOLUTE_PATH + "/topology.conf"
 
 # Set root logger
 ROUTING_LOG = routing_logging.create_routing_log("routing.log", "root")
@@ -63,7 +65,6 @@ class Daemon:
             sys.exit(1)
 
         # decouple from parent environment
-        # os.chdir("/")
         os.chdir(ABSOLUTE_PATH)
         os.setsid()
         os.umask(0)
