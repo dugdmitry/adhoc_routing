@@ -1,7 +1,7 @@
-DEV = "eth0"
+DEV = "wlan0"
 VIRT_IFACE_NAME = "adhoc0"
 LOG_LEVEL = "DEBUG"
-SET_TOPOLOGY_FLAG = True
+SET_TOPOLOGY_FLAG = False
 MONITORING_MODE_FLAG = False
 # Define a list of protocols and ports, for which to ENABLE reliable transmission of data packets over hops,
 # in a format: {protocol_name: [port_numbers]}.

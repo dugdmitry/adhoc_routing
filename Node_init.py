@@ -16,7 +16,6 @@ import atexit
 from signal import SIGINT, SIGTERM
 
 # Get DEV name from the default configuration file
-# from conf import DEV, ABSOLUTE_PATH, SET_TOPOLOGY_FLAG
 from conf import DEV, SET_TOPOLOGY_FLAG
 # Import module for handling the logging
 import routing_logging
