@@ -14,6 +14,7 @@ from socket import error as sock_error
 
 import routing_logging
 
+ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
 NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery")
 
 
@@ -29,7 +30,7 @@ class Neighbor:
 class NeighborDiscovery:
     def __init__(self, raw_transport_obj, table_obj):
         # Create initial empty neighbors file
-        f = open("neighbors_file", "w")
+        f = open(ABSOLUTE_PATH + "/neighbors_file", "w")
         f.close()
         # Create listening and advertising threads
         self.listen_neighbors_handler = ListenNeighbors(raw_transport_obj.node_mac, table_obj)
@@ -174,7 +175,7 @@ class ListenNeighbors:
 
     # Create and update the file with current neighbors, derived from self.neighbors_list
     def update_neighbors_file(self):
-        f = open("neighbors_file", "w")
+        f = open(ABSOLUTE_PATH + "/neighbors_file", "w")
         for mac in self.neighbors_list:
 
             NEIGHBOR_LOG.debug("Neighbor's IPs: %s", str(self.neighbors_list[mac].l3_addresses))

@@ -26,7 +26,7 @@ import routing_logging
 REDIRECT_TO = "/tmp/routing_output.log"
 PIDFILE_PATH = "/tmp/routing_daemon.pid"
 # Path to a topology configuration
-ABSOLUTE_PATH = os.path.dirname(os.path.abspath(__file__))
+ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
 TOPOLOGY_PATH = ABSOLUTE_PATH + "/topology.conf"
 
 # Set root logger

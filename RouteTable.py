@@ -10,6 +10,7 @@ import copy
 import rl_logic
 import routing_logging
 
+ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
 
 
@@ -65,7 +66,7 @@ class Entry(dict):
 class Table:
     def __init__(self, node_mac):
         # Define a filename to write the table to
-        self.table_filename = "table.txt"
+        self.table_filename = "/table.txt"
 
         self.node_mac = node_mac
 
@@ -147,7 +148,7 @@ class Table:
 
         current_entries_list = dict(zip(current_keys, current_values))
 
-        f = open(self.table_filename, "w")
+        f = open(ABSOLUTE_PATH + self.table_filename, "w")
         f.write("-" * 90 + "\n")
 
         for dst_ip in current_entries_list:
