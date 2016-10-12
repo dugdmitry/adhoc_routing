@@ -10,7 +10,7 @@ import Queue
 import logging
 from logging.handlers import RotatingFileHandler
 from conf import LOG_LEVEL
-ABSOLUTE_PATH = os.getcwd()
+ABSOLUTE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # Define a global queue for receiving the methods from the Logger objects and its arguments
 LOG_QUEUE = Queue.Queue()
