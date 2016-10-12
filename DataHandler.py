@@ -16,7 +16,7 @@ import threading
 from collections import deque
 
 import routing_logging
-from conf import MONITORING_MODE_FLAG, ARQ_LIST
+from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST
 
 lock = threading.Lock()
 
@@ -57,7 +57,6 @@ class AppHandler:
         self.app_transport = app_transport
         self.raw_transport = raw_transport
         self.table = table
-
         self.broadcast_mac = raw_transport.broadcast_mac
 
         # Create an arq handler instance
@@ -68,6 +67,12 @@ class AppHandler:
 
         # Create and start path_discovery_handler for dealing with the packets with no next hop node
         self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(app_transport, self.arq_handler)
+
+        # Define a send_unicast_packet method, depending on the ENABLE_ARQ value
+        if ENABLE_ARQ:
+            self.send_unicast_packet = self.send_packet_with_arq
+        else:
+            self.send_unicast_packet = self.send_packet
 
     def process_packet(self, packet):
         # Get the src_ip and dst_ip from the packet
@@ -138,32 +143,38 @@ class AppHandler:
         # Forward packet to the next hop. Start a thread for waiting an ACK with reward.
         else:
             DATA_LOG.debug("For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
+            self.send_unicast_packet(packet, dst_ip, next_hop_mac)
 
-            # Check if the packet should be transmitted reliably
-            upper_proto, port_number = Transport.get_upper_proto_info(packet)
-            if (upper_proto in ARQ_LIST) and (port_number in ARQ_LIST[upper_proto]):
-                # Transmit the packet reliably
-                DATA_LOG.debug("This packet should be transmitted reliably: %s, %s", upper_proto, port_number)
+    # Send a packet to a next_hop_mac
+    def send_packet(self, packet, dst_ip, next_hop_mac):
+        # Create a unicast dsr message with proper values
+        dsr_message = Messages.UnicastPacket()
+        dsr_message.hop_count = 1
+        # Send the raw data with dsr_header to the next hop
+        self.raw_transport.send_raw_frame(next_hop_mac, dsr_message, packet)
+        # Process the packet through the reward_wait_handler
+        self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
 
-                # Create reliable dsr data message with proper values
-                dsr_message = Messages.ReliableDataPacket()
-                dsr_message.hop_count = 1
+    # Send a packet to a next_hop_mac, if ARQ retransmission is enabled
+    def send_packet_with_arq(self, packet, dst_ip, next_hop_mac):
+        # Check if the packet should be transmitted reliably
+        upper_proto, port_number = Transport.get_upper_proto_info(packet)
+        if (upper_proto in ARQ_LIST) and (port_number in ARQ_LIST[upper_proto]):
+            # Transmit the packet reliably
+            DATA_LOG.debug("This packet should be transmitted reliably: %s, %s", upper_proto, port_number)
 
-                # Send the message using ARQ
-                self.arq_handler.arq_send(dsr_message, [next_hop_mac], payload=packet)
-                # Process the packet through the reward_wait_handler
-                self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
+            # Create reliable dsr data message with proper values
+            dsr_message = Messages.ReliableDataPacket()
+            dsr_message.hop_count = 1
 
-            # Else, transmit the data packet normally
-            else:
-                # Create a unicast dsr message with proper values
-                dsr_message = Messages.UnicastPacket()
-                dsr_message.hop_count = 1
+            # Send the message using ARQ
+            self.arq_handler.arq_send(dsr_message, [next_hop_mac], payload=packet)
+            # Process the packet through the reward_wait_handler
+            self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
 
-                # Send the raw data with dsr_header to the next hop
-                self.raw_transport.send_raw_frame(next_hop_mac, dsr_message, packet)
-                # Process the packet through the reward_wait_handler
-                self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
+        # Else, transmit the data packet normally
+        else:
+            self.send_packet(packet, dst_ip, next_hop_mac)
 
     # Send the packet back to the virtual network interface
     def send_back(self, packet):
