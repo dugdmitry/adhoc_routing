@@ -23,8 +23,8 @@ import routing_logging
 
 
 # Default daemon parameters.
-REDIRECT_TO = "/tmp/routing_output.log"
-PIDFILE_PATH = "/tmp/routing_daemon.pid"
+REDIRECT_TO = routing_logging.PATH_TO_LOGS + "crash_output.log"
+PIDFILE_PATH = "/var/run/routing_daemon.pid"
 # Path to a topology configuration
 ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
 TOPOLOGY_PATH = ABSOLUTE_PATH + "/topology.conf"
