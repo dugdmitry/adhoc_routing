@@ -1,0 +1,6 @@
+<map id="Node_init.RoutingDaemon.run" name="Node_init.RoutingDaemon.run">
+<area shape="rect" id="node2" href="$namespacerouting__logging.html#a54831f276b3c1260547f98eb2aa50b89" title="Initialize the log thread. " alt="" coords="284,5,415,47"/>
+<area shape="rect" id="node3" href="$namespace_transport.html#a360e56570c4d82815f767f5c1c7cd86f" title="Get MAC address from the network interface. " alt="" coords="284,71,415,98"/>
+<area shape="rect" id="node4" href="$class_node__init_1_1_routing_daemon.html#a3c3271eb9ecb6e7af22c11c6a97accb4" title="Get the topology neighbors of a given node from the topology_list. " alt="" coords="251,123,448,164"/>
+<area shape="rect" id="node5" href="$namespacerouting__logging.html#a78f8e9f833baa7dd4ab7dd7353ff3c82" title="Stop the log thread. " alt="" coords="280,188,419,229"/>
+</map>
