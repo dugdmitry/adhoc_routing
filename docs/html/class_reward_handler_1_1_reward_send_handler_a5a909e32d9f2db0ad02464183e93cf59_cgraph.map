@@ -1,0 +1,4 @@
+<map id="RewardHandler.RewardSendHandler.send_reward" name="RewardHandler.RewardSendHandler.send_reward">
+<area shape="rect" id="node2" href="$class_data_handler_1_1_app_handler.html#aa75be11deb422613b130f73464e0c6b0" title="Send the packet back to the virtual network interface. " alt="" coords="244,5,479,32"/>
+<area shape="rect" id="node3" href="$class_reward_handler_1_1_reward_send_handler.html#a49b396c4911ec716c2aaddede33bf8e1" title="Generate and send the reward message back to the originating node. " alt="" coords="266,57,457,98"/>
+</map>
