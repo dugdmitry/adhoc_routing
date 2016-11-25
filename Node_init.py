@@ -1,43 +1,67 @@
 #!/usr/bin/python
 """
+@package Node_init
 Created on Sep 25, 2014
 
 @author: Dmitrii Dugaev
+
+
+This module is a starting point of the program. It performs two main operations - first, provides methods for correctly
+daemonizing the application after start, second, provides the main initialization point for all supporting threads and
+handlers, used by the the program, as well as the de-construction routine after killing the daemon.
 """
 
-import DataHandler
-import RouteTable
-import Transport
-
+# Import necessary python modules from the standard library
 import sys
 import os
 import time
 import atexit
 from signal import SIGINT, SIGTERM
 
+# Import the necessary modules of the program
+import DataHandler
+import RouteTable
+import Transport
 # Get DEV name from the default configuration file
 from conf import DEV, SET_TOPOLOGY_FLAG
 # Import module for handling the logging
 import routing_logging
 
 
-# Default daemon parameters.
+# Default daemon parameters
+## @var REDIRECT_TO
+# This constant defines a string with an absolute path to the stdout file of the daemon.
+# In case if the program crashes, the last crash output will be written in this file.
 REDIRECT_TO = routing_logging.PATH_TO_LOGS + "crash_output.log"
+## @var PIDFILE_PATH
+# This constant defines a string with an absolute path to the daemon's pid file.
 PIDFILE_PATH = "/var/run/routing_daemon.pid"
 # Path to a topology configuration
+## @var ABSOLUTE_PATH
+# This constant is a string with an absolute path to the program's main directory.
 ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
+## @var TOPOLOGY_PATH
+# This constant is a string with an absolute path to the file with pre-defined network topology.
+# This file will be used for incoming frames filtering if the "SET_TOPOLOGY_FLAG" in the conf.py
+# configuration file will be set to True.
 TOPOLOGY_PATH = ABSOLUTE_PATH + "/topology.conf"
 
 # Set root logger
+## @var ROUTING_LOG
+# Contains a reference to routing_logging.LogWrapper object of the main root logger for writing
+# the log messages of the main module.
 ROUTING_LOG = routing_logging.create_routing_log("routing.log", "root")
 
 
+## A class used for creating and managing the application daemon.
+# A generic daemon class for starting the main running function by overriding the run() method.
 class Daemon:
-    """
-    A generic daemon class.
-
-    Usage: subclass the Daemon class and override the run() method
-    """
+    ## Constructor
+    # @param self The object pointer.
+    # @param pidfile An absolute path to the pid file of the process.
+    # @param stdin Path for stdin forwarding
+    # @param stdout Path for stdout forwarding
+    # @param stderr Path for stderr forwarding
     def __init__(self, pidfile, stdin="/dev/null", stdout=REDIRECT_TO, stderr=REDIRECT_TO):
         self.stdin = stdin
         self.stdout = stdout
@@ -48,12 +72,10 @@ class Daemon:
         f.write("\n" + "-" * 100 + "\n")
         f.close()
 
+    ## Daemonize the process and do all the routine related to that
+    # @param self The object pointer.
     def daemonize(self):
-        """
-        do the UNIX double-fork magic, see Stevens' "Advanced
-        Programming in the UNIX Environment" for details (ISBN 0201563177)
-        http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
-        """
+        # Fork the process
         try:
             pid = os.fork()
             if pid > 0:
@@ -94,13 +116,14 @@ class Daemon:
         pid = str(os.getpid())
         file(self.pidfile, 'w+').write("%s\n" % pid)
 
+    ## Delete the pid file.
+    # @param self The object pointer.
     def del_pid(self):
         os.remove(self.pidfile)
 
+    ## Start the daemon.
+    # @param self The object pointer.
     def start(self):
-        """
-        Start the daemon
-        """
         # Check for a pidfile to see if the daemon already runs
         try:
             pf = file(self.pidfile, 'r')
@@ -118,10 +141,9 @@ class Daemon:
         self.daemonize()
         self.run()
 
+    ## Stop the daemon
+    # @param self The object pointer.
     def stop(self):
-        """
-        Stop the daemon
-        """
         # Get the pid from the pidfile
         try:
             pf = file(self.pidfile, 'r')
@@ -152,23 +174,25 @@ class Daemon:
                 print str(err)
                 sys.exit(1)
 
+    ## Restart the daemon.
+    # @param self The object pointer.
     def restart(self):
-        """
-        Restart the daemon
-        """
         self.stop()
         self.start()
 
+    ## Default method for overriding by the child class which inherited the Daemon.
+    # It will be called after the process has been daemonized by start() or restart().
+    # @param self The object pointer.
     def run(self):
-        """
-        You should override this method when you subclass Daemon. It will be called after the process has been
-        daemonized by start() or restart().
-        """
+        pass
 
 
-# Routing class instance
+## Generic routing class.
+# This is a generic routing class which initializes all the supporting classes, and runs the process in the main loop.
+# It also catches the SIGINT signals from the daemon when the program shuts down.
 class RoutingDaemon(Daemon):
-
+    ## Main run method.
+    # @param self The object pointer.
     def run(self):
         # Initialize and start the log thread
         routing_logging.init_log_thread()
@@ -177,7 +201,7 @@ class RoutingDaemon(Daemon):
 
         # Get mac address of the network interface
         node_mac = Transport.get_mac(DEV)
-        # Creating a raw_transport object for sending DSR-like packets over the given interface
+        # Get a list of neighbors MAC addresses to be accepted (if the TOPOLOGY_FLAG is True).
         topology_neighbors = self.get_topology_neighbors(node_mac)
         # Creating a transport for communication with a virtual interface
         app_transport = Transport.VirtualTransport()
@@ -219,8 +243,11 @@ class RoutingDaemon(Daemon):
 
         return 0
 
-    # Get the topology neighbors of a given node from the topology_list.
-    # It is needed for correct filtering the broadcast frames sent via raw sockets.
+    ## Get the topology neighbors of a given node from the topology_list.
+    # It is needed for correct filtering of the incoming frames from the raw socket.
+    # @param self The object pointer.
+    # @param node_mac The MAC address in a form "xx:xx:xx:xx:xx:xx" of the node's physical network interface used for
+    # communication.
     def get_topology_neighbors(self, node_mac):
         # Open a default topology file, if it exists
         try:
@@ -245,7 +272,8 @@ class RoutingDaemon(Daemon):
 
 
 if __name__ == "__main__":
-    # Create the routing daemon instance
+    ## @var routing
+    # Main routing daemon object.
     routing = RoutingDaemon(PIDFILE_PATH)
 
     if len(sys.argv) == 2:

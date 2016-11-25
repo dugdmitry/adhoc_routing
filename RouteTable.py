@@ -1,39 +1,65 @@
 #!/usr/bin/python
 """
+@package RouteTable
 Created on Aug 1, 2016
 
 @author: Dmitrii Dugaev
+
+
+This module presents a routing table implementation of the protocol, with formats for routing entries, and with the
+corresponding processing methods.
 """
 
+# Import necessary python modules from the standard library
 import copy
 
+# Import the necessary modules of the program
 import rl_logic
 import routing_logging
 
+## @var ABSOLUTE_PATH
+# This constant stores a string with an absolute path to the program's main directory.
 ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
+
+## @var TABLE_LOG
+# Global routing_logging.LogWrapper object for logging RouteTable activity.
 TABLE_LOG = routing_logging.create_routing_log("routing.route_table.log", "route_table")
 
 
-# Class Entry represents a dictionary containing current estimated values for forwarding a packet to the given mac.
+## Class Entry represents a dictionary containing current estimated values for forwarding a packet to the given mac.
 class Entry(dict):
+    ## Constructor.
+    # @param self The object pointer.
+    # @param dst_ip Destination IP address of the route.
+    # @param neighbors_list List of MAC addresses of currently accessible direct neighbors.
+    # @return None
     def __init__(self, dst_ip, neighbors_list):
         super(Entry, self).__init__()
+        ## @var dst_ip
+        # Destination IP address of the route.
         self.dst_ip = dst_ip
-        # Store a copy of the initial neighbors_list
+        ## @var local_neighbor_list
+        # Store a copy of the initial list of direct neighbors.
         self.local_neighbor_list = copy.deepcopy(neighbors_list)
-        # Initialize the first values for the freshly added actions
+        # Initialize the first estimation values for the freshly added actions/neighbors.
         self.init_values()
-        # Create an ValueEstimator object for keeping the updates for incoming rewards
+        ## @var value_estimator
+        # Create rl_logic.ValueEstimator object for keeping the updates for incoming rewards.
         self.value_estimator = rl_logic.ValueEstimator()
 
-    # Initialize the first values for the freshly added actions
+    ## Initialize the first estimation values for the freshly added actions/neighbors.
+    # @param self The object pointer.
+    # @return None
     def init_values(self):
         for mac in self.local_neighbor_list:
             if mac not in self:
                 # Assign initial estimated values
                 self.update({mac: 0.0})
 
-    # Update the list of neighbors, according to a given neighbors list
+    ## Update the list of neighbors, according to a given neighbors list.
+    # @param self The object pointer.
+    # @param neighbors_list List of MAC addresses of currently accessible direct neighbors.
+    # @return None
     def update_neighbors(self, neighbors_list):
         if self.local_neighbor_list == neighbors_list:
             pass
@@ -51,42 +77,59 @@ class Entry(dict):
             # Initialize the est_values for new macs
             self.init_values()
 
-    # Update estimated value on the action (mac) by the given reward
+    ## Update estimation value on the action (mac) by the given reward.
+    # @param self The object pointer.
+    # @param mac MAC address of the neighbor (action ID).
+    # @param reward Reward value to be assigned.
+    # @return None
     def update_value(self, mac, reward):
         # Estimate the value and update the entry itself
         self[mac] = self.value_estimator.estimate_value(mac, reward)
 
-    # Calculate and output the average of estimation values of itself
+    ## Calculate and output the average of estimation values of this entry itself.
+    ## Initialize the first estimation values for the freshly added actions/neighbors.
+    # @param self The object pointer.
+    # @return Average estimation value: sum(self.values()) / len(self).
     def calc_avg_value(self):
         return sum(self.values()) / len(self)
 
 
-# A class of route table. Contains a list and methods for manipulating the entries and its values, which correspond to
-# different src-dst pairs (routes).
+## Route table class.
+# Contains a list and methods for manipulating the entries and its values, which correspond to different src-dst
+# pairs (routes).
 class Table:
+    ## Constructor.
+    # @param self The object pointer.
+    # @param node_mac MAC address of the node's network interface.
+    # @return None
     def __init__(self, node_mac):
-        # Define a filename to write the table to
+        ## @var table_filename
+        # Define a filename to write the table entries to. Default filename is "table.txt".
         self.table_filename = "/table.txt"
-
+        ## @var node_mac
+        # MAC address of the node's network interface.
         self.node_mac = node_mac
-
+        ## @var neighbors_list
         # Define a shared dictionary of current active neighbors. This dictionary is also used by the
-        # ListenNeighbors class from the NeighborDiscovery module. Format: {mac: neighbor_object}
+        # ListenNeighbors class from the NeighborDiscovery module. Format: {mac: NeighborDiscovery.Neighbor object}.
         self.neighbors_list = dict()
-
-        # Define list of current route entries. Format: {dst_ip: Entry}
+        ## @var entries_list
+        # Define list of current route entries. Format: {dst_ip: Entry}.
         self.entries_list = dict()
-
-        # Store current ip addresses assigned to this node
+        ## @var current_node_ips
+        # Store current ip addresses assigned to this node. list().
         self.current_node_ips = list()
-
-        # Create RL helper object, to handle the selection of the actions
+        ## @var action_selector
+        # Create RL-helper rl_logic.ActionSelector object, to handle the process of action selection.
         self.action_selector = rl_logic.ActionSelector("soft-max")
         TABLE_LOG.info("Chosen selection method: %s", self.action_selector.selection_method_id)
 
-    # This method selects a next hop for the packet with the given dst_ip.
+    ## This method selects a next hop for the packet with the given dst_ip.
     # The selection is being made from the current estimated values of the neighbors mac addresses,
     # using some of the available action selection algorithms - such as greedy, e-greedy, soft-max and so on.
+    # @param self The object pointer.
+    # @param dst_ip Destination IP address of the route.
+    # @return (MAC address of the next hop) or None.
     def get_next_hop_mac(self, dst_ip):
         if dst_ip in self.entries_list:
             # Update the neighbors and corresponding action values
@@ -100,7 +143,12 @@ class Table:
         else:
             return None
 
-    # Update the estimation value of the given action_id (mac) by the given reward
+    ## Update the estimation value of the given action_id (mac) by the given reward.
+    # @param self The object pointer.
+    # @param dst_ip Destination IP address of the route.
+    # @param mac MAC address of the neighbor (action ID).
+    # @param reward Reward value to be assigned.
+    # @return None
     def update_entry(self, dst_ip, mac, reward):
         if dst_ip in self.entries_list:
             self.entries_list[dst_ip].update_value(mac, reward)
@@ -111,7 +159,10 @@ class Table:
             self.entries_list.update({dst_ip: Entry(dst_ip, self.neighbors_list)})
             self.entries_list[dst_ip].update_value(mac, reward)
 
-    # Calculate and return the average estimated value of the given entry
+    ## Calculate and return the average estimation value of the given entry.
+    # @param self The object pointer.
+    # @param dst_ip Destination IP address of the route.
+    # @return Average estimation value. float().
     def get_avg_value(self, dst_ip):
         if dst_ip in self.entries_list:
             avg_value = self.entries_list[dst_ip].calc_avg_value()
@@ -122,22 +173,27 @@ class Table:
             TABLE_LOG.warning("CANNOT GET AVERAGE VALUE! NO SUCH ENTRY!!! Returning 0")
             return 0.0
 
-    # Return the current list of neighbors
+    ## Return the current list of neighbors.
+    # @param self The object pointer.
+    # @return List of current neighbors. list().
     def get_neighbors(self):
         neighbors_list = list(set(self.neighbors_list))
-
         TABLE_LOG.debug("Current list of neighbors: %s", neighbors_list)
-
         return neighbors_list
 
-    # Return current entry assigned for given dst_ip
+    ## Return current entry assigned for given destination IP.
+    # @param self The object pointer.
+    # @param dst_ip Destination IP address of the route.
+    # @return (Entry object) or None.
     def get_entry(self, dst_ip):
         if dst_ip in self.entries_list:
             return self.entries_list[dst_ip]
         else:
             return None
 
-    # Print out the contents of the route table to a specified file
+    ## Print out the contents of the route table to a specified file.
+    # @param self The object pointer.
+    # @return None
     def print_table(self):
         current_keys = self.entries_list.keys()
         current_values = self.entries_list.values()

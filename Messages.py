@@ -1,5 +1,6 @@
 #!/usr/bin/python
 """
+@package Messages
 Created on Oct 7, 2016
 
 @author: Dmitrii Dugaev
@@ -35,7 +36,7 @@ to select a next hop, not being completely relied on a current fixed route table
 |      |                           |                         |                                                         |
 |  7   |           ACK             |        8                |       ACK service message for reliable transmission     |
 |      |                           |                         |                                                         |
-|  8   |          REWARD           |        6                |               Reward service message                    |
+|  8   |          REWARD           |        8                |               Reward service message                    |
 |      |                           |                         |                                                         |
 |  9   |   Reliable Data Packet    |        4                |   Unicast data packet which is transmitted using ARQ    |
 ------------------------------------------------------------------------------------------------------------------------
@@ -44,18 +45,20 @@ The messages (headers) are described as CType classes with pre-defined fields, d
 A detailed description of the fields and its functionality can be found in the documentation.
 """
 
+# Import necessary python modules from the standard library
 from random import randint
 from socket import AF_INET6, inet_pton, inet_aton, inet_ntoa, inet_ntop
 from socket import error as sock_error
 from math import ceil
-
 import ctypes
 import struct
 import binascii
 
 
 # Define static functions for packing and unpacking the message object to and from the binary dsr header.
-# Pack the object to dsr header. Return the byte array.
+## Pack the Message object to dsr header. Return the byte array.
+# @param message Message object from Messages module.
+# @return packed byte array bytearray() value.
 def pack_message(message):
     if isinstance(message, UnicastPacket):
         return UnicastHeader().pack(message)
@@ -103,7 +106,9 @@ def pack_message(message):
         return None
 
 
-# Unpack an object from the dsr header. Return the message object.
+## Unpack the Message object from the dsr header' bytearray value. Return the message object from Messages module.
+# @param binary_header Binary header (bytearray) with the packed message.
+# @return Message object, length of the unpacked message.
 def unpack_message(binary_header):
     class TypeField(ctypes.LittleEndianStructure):
         _fields_ = [
@@ -149,124 +154,259 @@ def unpack_message(binary_header):
         return None
 
 
-#######################################################################################################################
 # TODO: make constructors for all messages
 # Describe all message classes, whose instances will be used to manipulate and "pack" the data to dsr binary header.
-# Unicast data packet
+## Unicast data packet.
 class UnicastPacket:
+    ## Type ID of Unicast Data Packet
     type = 0
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
-        self.id = randint(0, 1048575)       # Max value is 2**20 (20 bits - id field size)
+        ## @var id
+        # Unique packet ID.
+        # Max value is (2**20 - 1), since the id field size is 20 bits.
+        self.id = randint(0, 1048575)
+        ## @var hop_count
+        # Current hop count value.
         self.hop_count = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: , ID: , HOP_COUNT: ".
     def __str__(self):
         out_tuple = (self.type, self.id, self.hop_count)
         out_string = "TYPE: %s, ID: %s, HOP_COUNT: %s" % out_tuple
         return out_string
 
 
-# Broadcast data packet
+## Broadcast data packet.
 class BroadcastPacket:
+    ## Type ID of Broadcast Data Packet
     type = 1
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
+        ## @var id
+        # Unique packet ID.
         self.id = self.id = randint(0, 1048575)
+        ## @var broadcast_ttl
+        # Broadcast TTL counter.
         self.broadcast_ttl = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: , ID: , BROADCAST_TTL: ".
     def __str__(self):
         out_tuple = (self.type, self.id, self.broadcast_ttl)
         out_string = "TYPE: %s, ID: %s, BROADCAST_TTL: %s" % out_tuple
         return out_string
 
 
-# Route Request service message for IPv4 and IPv6 L3 addressing
+## Route Request service message.
+# This service message is used for both IPv4 and IPv6 L3 addressing cases.
 class RreqMessage:
+    ## Type ID of RREQ message.
+    # This type ID value is being set in Messages.pack_message function, depending on L3 addressing type this
+    # message contains. In case of IPv4 - type ID is 2, in case of IPv6 - type ID is 3.
     type = int()
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
+        ## @var id
+        # Unique message ID.
         self.id = randint(0, 1048575)
+        ## @var src_ip
+        # Source IP address in a string representation form of IPv4 or IPv6 addresses.
         self.src_ip = str()
+        ## @var dst_ip
+        # Destination IP address in a string representation form of IPv4 or IPv6 addresses.
         self.dst_ip = str()
+        ## @var hop_count
+        # Current hop count value.
         self.hop_count = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "ID: , SRC_IP: , DST_IP: , HOP_COUNT: ".
     def __str__(self):
         out_tuple = (self.id, self.src_ip, self.dst_ip, self.hop_count)
         out_string = "ID: %s, SRC_IP: %s, DST_IP: %s, HOP_COUNT: %s" % out_tuple
         return out_string
 
 
-# Route Reply service message for IPv4 and IPv6 L3 addressing
+## Route Reply service message.
+# This service message is used for both IPv4 and IPv6 L3 addressing cases.
 class RrepMessage:
+    ## Type ID of RREP message.
+    # This type ID value is being set in Messages.pack_message function, depending on L3 addressing type this
+    # message contains. In case of IPv4 - type ID is 4, in case of IPv6 - type ID is 5.
     type = int()
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
+        ## @var id
+        # Unique message ID.
         self.id = randint(0, 1048575)
+        ## @var src_ip
+        # Source IP address in a string representation form of IPv4 or IPv6 addresses.
         self.src_ip = str()
+        ## @var dst_ip
+        # Destination IP address in a string representation form of IPv4 or IPv6 addresses.
         self.dst_ip = str()
+        ## @var hop_count
+        # Current hop count value.
         self.hop_count = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: ,ID: , SRC_IP: , DST_IP: , HOP_COUNT: ".
     def __str__(self):
         out_tuple = (self.type, self.id, self.src_ip, self.dst_ip, self.hop_count)
         out_string = "TYPE: %s, ID: %s, SRC_IP: %s, DST_IP: %s, HOP_COUNT: %s" % out_tuple
         return out_string
 
 
-# Hello service message
+## Hello service message.
 class HelloMessage:
+    ## Type ID of Hello service message.
     type = 6
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
+        ## @var ipv4_count
+        # Amount of unicast IPv4 addresses, assigned to the virtual network interface.
+        # There can be only one IPv4 addressed assigned to the network interface, therefore, all possible values of
+        # this variable are: 0 - no IPv4 address assigned, 1 - IPv4 address is assigned.
         self.ipv4_count = 0
+        ## @var ipv6_count
+        # Amount of unicast IPv6 addresses, assigned to the virtual network interface.
+        # In the current implementation of Messages.HelloHeader, there could be assigned up to 3 IPv6
+        # addresses, which can then be transmitted inside the Hello message.
+        # All possible values are:
+        # 0 - no IPv6 address assigned.
+        # 1 - 1 IPv6 address is assigned.
+        # 2 - 2 IPv6 address is assigned.
+        # 3 - 3 IPv6 address is assigned.
         self.ipv6_count = 0
+        ## @var ipv4_address
+        # IPv4 address in string representation.
+        # If no IPv4 address is assigned to the network interface, the variable contains empty string "".
         self.ipv4_address = str()
+        ## @var ipv6_addresses
+        # List of all assigned IPv6 addresses, in string representation.
+        # If no IPv6 addresses are assigned to the network interface, the variable contains empty list [].
         self.ipv6_addresses = list()
+        ## @var tx_count
+        # Number of message rebroadcast times.
+        # Contains a number of times this particular Hello message has been rebroadcasted at the current moment.
         self.tx_count = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: , IPV4_ADDRESS: , IPV6_ADDRESSES: , TX_COUNT: ".
     def __str__(self):
         out_tuple = (self.type, self.ipv4_address, self.ipv6_addresses, self.tx_count)
         out_string = "TYPE: %s, IPV4_ADDRESS: %s, IPV6_ADDRESSES: %s, TX_COUNT: %s" % out_tuple
         return out_string
 
 
-# Acknowledgement message
+## Acknowledgement (ACK) service message.
 class AckMessage:
+    ## Type ID of ACK service message.
     type = 7
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
+        ## @var id
+        # Unique message ID.
         self.id = randint(0, 1048575)
+        ## @var tx_count
+        # Number of message retransmission times.
+        # Contains a number of times this particular ACK message has been retransmitted at the current moment.
         self.tx_count = 0
+        ## @var msg_hash
+        # Hash value of the data/service packet this ACK replies to.
+        # This hash value is calculated from two attributes of the data/service packet: destination IP of the packet,
+        # and the MAC address of a receiving node.
         self.msg_hash = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: , ID: , TX_COUNT: , MSG_HASH: ".
     def __str__(self):
         out_tuple = (self.type, self.id, self.tx_count, self.msg_hash)
         out_string = "TYPE: %s, ID: %s, TX_COUNT: %s, MSG_HASH: %s" % out_tuple
         return out_string
 
 
-# Reward message
+## Reward service message.
 class RewardMessage:
+    ## Type ID of reward service message.
     type = 8
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @param reward_value Assigned reward value.
+    # @param msg_hash Hash value of the packet.
+    # @return None
     def __init__(self, reward_value, msg_hash):
+        ## @var id
+        # Unique message ID.
         self.id = randint(0, 1048575)
+        ## @var reward_value
+        # Assigned reward value.
+        # This reward value is calculated and sent back by a node after it has received the packet with a given
+        # (destination IP + MAC address) pair.
         self.reward_value = int(ceil(reward_value))
+        ## @var msg_hash
+        # Hash value of the data packet this Reward message replies to.
+        # This hash value is calculated from two attributes of the data/service packet: destination IP of the packet,
+        # and the MAC address of a receiving node.
         self.msg_hash = msg_hash
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: , ID: , REWARD_VALUE: , MSG_HASH: ".
     def __str__(self):
         out_tuple = (self.type, self.id, self.reward_value, self.msg_hash)
         out_string = "TYPE: %s, ID: %s, REWARD_VALUE: %s, MSG_HASH: %s" % out_tuple
         return out_string
 
 
-# Unicast data packet, transmitted using ARQ module
+## Unicast data packet, transmitted using ARQ module.
+# This is a message for unicast data packets, which are enabled to be sent with the ARQ.
 class ReliableDataPacket:
+    ## Type ID of ARQ-based Unicast Data Packet.
     type = 9
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
-        self.id = randint(0, 1048575)  # Max value is 2**20 (20 bits - id field size)
+        ## @var id
+        # Unique packet ID.
+        # Max value is (2**20 - 1), since the id field size is 20 bits.
+        self.id = randint(0, 1048575)
+        ## @var hop_count
+        # Current hop count value.
         self.hop_count = 0
 
+    ## Default print method.
+    # @param self The object pointer.
+    # @return String with "TYPE: , ID: , HOP_COUNT: ".
     def __str__(self):
         out_tuple = (self.type, self.id, self.hop_count)
         out_string = "TYPE: %s, ID: %s, HOP_COUNT: %s" % out_tuple
@@ -275,8 +415,12 @@ class ReliableDataPacket:
 
 #######################################################################################################################
 # ## Describe DSR headers which will pack the initial message object and return a binary string ## #
-# Unicast header
+## Unicast header.
 class UnicastHeader:
+    ## Unicast data header structure.
+    # This sub-class describes a header structure for unicast data packet.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits. Total length: 32 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
                 ("TYPE", ctypes.c_uint32, 4),
@@ -284,16 +428,25 @@ class UnicastHeader:
                 ("HOP_COUNT", ctypes.c_uint32, 8)
             ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns a header binary string in hex representation
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param unicast_message The Messages.UnicastPacket object.
+    # @return A header binary string in hex representation.
     def pack(self, unicast_message):
         header = self.Header(unicast_message.type, unicast_message.id, unicast_message.hop_count)
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -305,8 +458,12 @@ class UnicastHeader:
         return message, len(bytearray(header_unpacked))
 
 
-# Broadcast header
+## Broadcast header.
 class BroadcastHeader:
+    ## Broadcast data header structure.
+    # This sub-class describes a header structure for broadcast data packet.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, BROADCAST_TTL: 8 bits. Total length: 32 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -314,16 +471,25 @@ class BroadcastHeader:
             ("BROADCAST_TTL", ctypes.c_uint32, 8)
         ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns a header binary string in hex representation
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param broadcast_message The Messages.BroadcastPacket object.
+    # @return A header binary string in hex representation.
     def pack(self, broadcast_message):
         header = self.Header(broadcast_message.type, broadcast_message.id, broadcast_message.broadcast_ttl)
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -335,8 +501,12 @@ class BroadcastHeader:
         return message, len(bytearray(header_unpacked))
 
 
-# RREQ4 header
+## RREQ4 header.
 class Rreq4Header:
+    ## RREQ4 header structure.
+    # This sub-class describes a header structure for RREQ4 service message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits, SRC_IP: 32 bits, DST_IP: 32 bits. Total length: 96 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -346,10 +516,16 @@ class Rreq4Header:
             ("DST_IP", ctypes.c_uint32, 32)
         ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns an integer with binary encoded data structure, created from the initial message
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param rreq4_message The Messages.RreqMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, rreq4_message):
         # Turn string representations of IP addresses into an integer form
         src_ip = struct.unpack("!I", inet_aton(rreq4_message.src_ip))[0]
@@ -358,7 +534,10 @@ class Rreq4Header:
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -373,8 +552,13 @@ class Rreq4Header:
         return message, len(bytearray(header_unpacked))
 
 
-# RREQ6 header
+## RREQ6 header.
 class Rreq6Header:
+    ## RREQ6 header structure.
+    # This sub-class describes a header structure for RREQ6 service message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits, SRC_IP1: 32 bits, SRC_IP2: 32 bits, SRC_IP3: 32 bits,
+    # SRC_IP4: 32 bits, DST_IP1: 32 bits, DST_IP2: 32 bits, DST_IP3: 32 bits, DST_IP4: 32 bits. Total length: 288 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -390,12 +574,21 @@ class Rreq6Header:
             ("DST_IP4", ctypes.c_uint32, 32)
         ]
 
+    ## 64-bit mask constant.
     max_int64 = 0xFFFFFFFFFFFFFFFF
+    ## 32-bit mask constant.
     max_int32 = 0xFFFFFFFF
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param rreq6_message The Messages.RreqMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, rreq6_message):
         # Turn string representations of IP addresses into an integer form
         src_ip = int(binascii.hexlify(inet_pton(AF_INET6, rreq6_message.src_ip)), 16)
@@ -416,7 +609,10 @@ class Rreq6Header:
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -440,8 +636,12 @@ class Rreq6Header:
         return message, len(bytearray(header_unpacked))
 
 
-# RREP4 header
+## RREP4 header.
 class Rrep4Header:
+    ## RREP4 header structure.
+    # This sub-class describes a header structure for RREP4 service message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits, SRC_IP: 32 bits, DST_IP: 32 bits. Total length: 96 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -451,10 +651,16 @@ class Rrep4Header:
             ("DST_IP", ctypes.c_uint32, 32)
         ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns an integer with binary encoded data structure, created from the initial message
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param rrep4_message The Messages.RrepMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, rrep4_message):
         # Turn string representations of IP addresses into an integer form
         src_ip = struct.unpack("!I", inet_aton(rrep4_message.src_ip))[0]
@@ -463,7 +669,10 @@ class Rrep4Header:
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -478,8 +687,13 @@ class Rrep4Header:
         return message, len(bytearray(header_unpacked))
 
 
-# RREP6 header
+## RREP6 header.
 class Rrep6Header:
+    ## RREP6 header structure.
+    # This sub-class describes a header structure for RREP6 service message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits, SRC_IP1: 32 bits, SRC_IP2: 32 bits, SRC_IP3: 32 bits,
+    # SRC_IP4: 32 bits, DST_IP1: 32 bits, DST_IP2: 32 bits, DST_IP3: 32 bits, DST_IP4: 32 bits. Total length: 288 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -495,12 +709,21 @@ class Rrep6Header:
             ("DST_IP4", ctypes.c_uint32, 32)
         ]
 
+    ## 64-bit mask constant.
     max_int64 = 0xFFFFFFFFFFFFFFFF
+    ## 32-bit mask constant.
     max_int32 = 0xFFFFFFFF
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param rrep6_message The Messages.RrepMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, rrep6_message):
         # Turn string representations of IP addresses into an integer form
         src_ip = int(binascii.hexlify(inet_pton(AF_INET6, rrep6_message.src_ip)), 16)
@@ -521,7 +744,10 @@ class Rrep6Header:
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -545,9 +771,12 @@ class Rrep6Header:
         return message, len(bytearray(header_unpacked))
 
 
-# Hello message header
+## Hello message header.
 class HelloHeader:
-    # Define fixed fields of the header structure
+    ## Hello message fixed fields structure.
+    # This structure defines fixed (constant) fields of the Hello header.
+    # Fields structure:
+    # TYPE: 4 bits, IPV4_COUNT: 1 bit, IPV6_COUNT: 2 bits, TX_COUNT: 25 bits. Total length: 32 bits.
     class FixedHeader(ctypes.LittleEndianStructure):
         _fields_ = [("TYPE", ctypes.c_uint32, 4),
                     ("IPV4_COUNT", ctypes.c_uint32, 1),
@@ -555,7 +784,10 @@ class HelloHeader:
                     ("TX_COUNT", ctypes.c_uint32, 25)
                     ]
 
-    # Header if only IPv4 address is present
+    ## Hello message header structure if only IPv4 address is present.
+    # Fields structure:
+    # TYPE: 4 bits, IPV4_COUNT: 1 bit, IPV6_COUNT: 2 bits, TX_COUNT: 25 bits, IPV4_ADDRESS: 32 bits.
+    # Total length: 64 bits.
     class OnlyIpv4Header(ctypes.LittleEndianStructure):
         _fields_ = [("TYPE", ctypes.c_uint32, 4),
                     ("IPV4_COUNT", ctypes.c_uint32, 1),
@@ -564,12 +796,21 @@ class HelloHeader:
                     ("IPV4_ADDRESS", ctypes.c_uint32, 32)
                     ]
 
+    ## 64-bit mask constant.
     max_int64 = 0xFFFFFFFFFFFFFFFF
+    ## 32-bit mask constant.
     max_int32 = 0xFFFFFFFF
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param hello_message The Messages.HelloMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, hello_message):
         args = [hello_message.type, hello_message.ipv4_count, hello_message.ipv6_count, hello_message.tx_count]
         # Add fields in the structure, depending on the given hello_message
@@ -612,7 +853,10 @@ class HelloHeader:
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Hello Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Get the first fixed part of the header
         fixed_header_unpacked = self.FixedHeader.from_buffer_copy(binary_header)
@@ -622,12 +866,7 @@ class HelloHeader:
         # Generate the rest of the part
         if fixed_header_unpacked.IPV4_COUNT and fixed_header_unpacked.IPV6_COUNT == 0:
             header_unpacked = self.OnlyIpv4Header.from_buffer_copy(binary_header)
-            # # Create and write to a message object
-            # message = HelloMessage()
-            # message.ipv4_count = header_unpacked.IPV4_COUNT
-            # message.ipv6_count = header_unpacked.IPV6_COUNT
             message.ipv4_address = inet_ntoa(struct.pack("!I", header_unpacked.IPV4_ADDRESS))
-            # message.tx_count = header_unpacked.TX_COUNT
 
         elif fixed_header_unpacked.IPV6_COUNT:
 
@@ -645,9 +884,6 @@ class HelloHeader:
             class Header(ctypes.Structure):
                 _fields_ = fields
 
-            # # Create and write to a message object
-            # message = HelloMessage()
-
             header_unpacked = Header.from_buffer_copy(binary_header)
 
             if header_unpacked.IPV4_COUNT:
@@ -664,11 +900,8 @@ class HelloHeader:
 
                 message.ipv6_addresses.append(inet_ntop(AF_INET6, ipv6_packed_value))
 
-            # message.tx_count = header_unpacked.TX_COUNT
-
         # Else, create a message without ip addresses
         else:
-            # message = HelloMessage()
             message.tx_count = fixed_header_unpacked.TX_COUNT
             message.ipv4_count = fixed_header_unpacked.IPV4_COUNT
             message.ipv6_count = fixed_header_unpacked.IPV6_COUNT
@@ -683,8 +916,12 @@ class HelloHeader:
         return message, len(bytearray(header_unpacked))
 
 
-# ACK header
+## ACK header.
 class AckHeader:
+    ## ACK header structure.
+    # This sub-class describes a header structure for ACK message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, TX_COUNT: 8 bits, MSG_HASH: 32 bits. Total length: 64 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -693,16 +930,25 @@ class AckHeader:
             ("MSG_HASH", ctypes.c_uint32, 32)
         ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns an integer with binary encoded data structure, created from the initial message
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param ack_message The Messages.AckMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, ack_message):
         header = self.Header(ack_message.type, ack_message.id, ack_message.tx_count, ack_message.msg_hash)
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -715,8 +961,13 @@ class AckHeader:
         return message, len(bytearray(header_unpacked))
 
 
-# Reward header
+## Reward header.
 class RewardHeader:
+    ## Reward header structure.
+    # This sub-class describes a header structure for Reward message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, NEG_REWARD_FLAG: 1 bit, REWARD_VALUE: 7 bits, MSG_HASH: 32 bits.
+    # Total length: 64 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
             ("TYPE", ctypes.c_uint32, 4),
@@ -726,10 +977,16 @@ class RewardHeader:
             ("MSG_HASH", ctypes.c_uint32, 32)
         ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns an integer with binary encoded data structure, created from the initial message
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param reward_message The Messages.RewardMessage object.
+    # @return A header binary string in hex representation.
     def pack(self, reward_message):
         if reward_message.reward_value < 0:
             header = self.Header(reward_message.type, reward_message.id, 1,
@@ -740,7 +997,10 @@ class RewardHeader:
         # Return the byte array
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)
@@ -755,8 +1015,12 @@ class RewardHeader:
         return message, len(bytearray(header_unpacked))
 
 
-# Unicast header, transmitted reliably using ARQ
+## Reliable Unicast Data Header.
 class ReliableDataHeader:
+    ## Reward header structure.
+    # This sub-class describes a header structure for reliable data message.
+    # Fields structure:
+    # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits. Total length: 32 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
                 ("TYPE", ctypes.c_uint32, 4),
@@ -764,16 +1028,25 @@ class ReliableDataHeader:
                 ("HOP_COUNT", ctypes.c_uint32, 8)
             ]
 
+    ## Constructor.
+    # @param self The object pointer.
+    # @return None
     def __init__(self):
         pass
 
-    # Returns a header binary string in hex representation
+    ## Pack the message object into the given structure.
+    # @param self The object pointer.
+    # @param reliable_data_packet The Messages.ReliableDataPacket object.
+    # @return A header binary string in hex representation.
     def pack(self, reliable_data_packet):
         header = self.Header(reliable_data_packet.type, reliable_data_packet.id, reliable_data_packet.hop_count)
         # Return the array in byte representation
         return bytearray(header)
 
-    # Returns a message object, created from the binary data
+    ## Unpack the message object from the binary string.
+    # @param self The object pointer.
+    # @param binary_header Binary string with the Header structure.
+    # @return (message object, created from the binary string), (length of the unpacked header structure)
     def unpack(self, binary_header):
         # Cast the byte_array into the structure
         header_unpacked = self.Header.from_buffer_copy(binary_header)

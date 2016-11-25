@@ -1,44 +1,71 @@
 #!/usr/bin/python
 """
+@package DataHandler
 Created on Oct 6, 2014
 
 @author: Dmitrii Dugaev
+
+
+This module is responsible for processing all incoming/outgoing data transmission from the user application performed
+by AppHandler thread, and from the network interface performed by IncomingTrafficHandler thread.
+This processing includes all unicast/broadcast data packets, and all RLRP service messages.
 """
 
+# Import necessary python modules from the standard library
 import Messages
 import Transport
 import PathDiscovery
 import NeighborDiscovery
 import ArqHandler
 import RewardHandler
-
 import threading
 from collections import deque
 
+# Import the necessary modules of the program
 import routing_logging
 from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST
 
+## @var lock
+# Store the global threading.Lock object.
 lock = threading.Lock()
 
 # Set up logging
+## @var DATA_LOG
+# Global routing_logging.LogWrapper object for logging DataHandler activity.
 DATA_LOG = routing_logging.create_routing_log("routing.data_handler.log", "data_handler")
 
 
-# Wrapping class for starting all auxiliary handlers and threads
+## Wrapping class for starting all auxiliary handlers and threads.
 class DataHandler:
+    ## Constructor.
+    # @param self The object pointer.
+    # @param app_transport Reference to Transport.VirtualTransport object.
+    # @param raw_transport Reference to Transport.RawTransport object.
+    # @param table Reference to RouteTable.Table object.
+    # @return None
     def __init__(self, app_transport, raw_transport, table):
         # Creating handlers instances
+        ## @var app_handler
+        # Create and store the object of DataHandler.AppHandler class.
         self.app_handler = AppHandler(app_transport, raw_transport, table)
         # Creating handler threads
+        ## @var neighbor_routine
+        # Create and store the object of NeighborDiscovery.NeighborDiscovery class.
         self.neighbor_routine = NeighborDiscovery.NeighborDiscovery(raw_transport, table)
+        ## @var incoming_traffic_handler_thread
+        # Create and store the object of DataHandler.IncomingTrafficHandler class.
         self.incoming_traffic_handler_thread = IncomingTrafficHandler(self.app_handler, self.neighbor_routine)
 
-    # Starting the threads
+    ## Start the main threads.
+    # @param self The object pointer.
+    # @return None
     def run(self):
         self.neighbor_routine.run()
         self.incoming_traffic_handler_thread.start()
 
-    # Stopping the threads
+    ## Stop the main threads.
+    # @param self The object pointer.
+    # @return None
     def stop_threads(self):
         self.neighbor_routine.stop_threads()
         self.incoming_traffic_handler_thread.quit()
@@ -46,34 +73,56 @@ class DataHandler:
         DATA_LOG.info("Traffic handlers are stopped")
 
 
+## Class for handling all incoming user application data, received from the virtual network interface.
 # A starting point of message transmission.
 # It initialises all handler objects, which then will be used by IncomingTraffic thread upon receiving messages
 # from the network.
 class AppHandler:
+    ## Constructor.
+    # @param self The object pointer.
+    # @param app_transport Reference to Transport.VirtualTransport object.
+    # @param raw_transport Reference to Transport.RawTransport object.
+    # @param table Reference to RouteTable.Table object.
+    # @return None
     def __init__(self, app_transport, raw_transport, table):
-        # Creating a deque list for keeping the received broadcast IDs
+        ## @var broadcast_list
+        # List of IDs of all previously processed broadcast messages.
+        # Creating a deque list for keeping the received broadcast IDs.
         self.broadcast_list = deque(maxlen=100)  # Limit the max length of the list
-
+        ## @var app_transport
+        # Reference to Transport.VirtualTransport object.
         self.app_transport = app_transport
+        ## @var raw_transport
+        # Reference to Transport.RawTransport object.
         self.raw_transport = raw_transport
+        ## @var table
+        # Reference to RouteTable.Table object.
         self.table = table
+        ## @var broadcast_mac
+        # Store the default MAC broadcast value, referenced from Transport.RawTransport.broadcast_mac.
         self.broadcast_mac = raw_transport.broadcast_mac
-
-        # Create an arq handler instance
+        ## @var arq_handler
+        # Create and store an ArqHandler.ArqHandler instance.
         self.arq_handler = ArqHandler.ArqHandler(raw_transport, table)
-
-        # Create a handler for waiting for an incoming reward for previously sent packets
+        ## @var reward_wait_handler
+        # Create and store a RewardHandler.RewardWaitHandler object for waiting for an incoming reward of previously
+        # sent packets.
         self.reward_wait_handler = RewardHandler.RewardWaitHandler(table)
-
-        # Create and start path_discovery_handler for dealing with the packets with no next hop node
+        ## @var path_discovery_handler
+        # Create and store a PathDiscovery.PathDiscoveryHandler object for dealing with the packets with no next hop
+        # node.
         self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(app_transport, self.arq_handler)
-
-        # Define a send_unicast_packet method, depending on the ENABLE_ARQ value
+        ## @var send_unicast_packet
+        # Create a reference to the default self.send_unicast_packet method, depending on the ENABLE_ARQ value.
         if ENABLE_ARQ:
             self.send_unicast_packet = self.send_packet_with_arq
         else:
             self.send_unicast_packet = self.send_packet
 
+    ## Process an incoming data packet from the upper application layer.
+    # @param self The object pointer.
+    # @param packet Received raw packet from the virtual network interface.
+    # @return None
     def process_packet(self, packet):
         # Get the src_ip and dst_ip from the packet
         try:
@@ -145,7 +194,12 @@ class AppHandler:
             DATA_LOG.debug("For DST_IP: %s found a next_hop_mac: %s", dst_ip, next_hop_mac)
             self.send_unicast_packet(packet, dst_ip, next_hop_mac)
 
-    # Send a packet to a next_hop_mac
+    ## Send a packet to a next_hop_mac.
+    # @param self The object pointer.
+    # @param packet Received raw packet from the virtual network interface.
+    # @param dst_ip Destination IP of the packet.
+    # @param next_hop_mac MAC address of a next hop node.
+    # @return None
     def send_packet(self, packet, dst_ip, next_hop_mac):
         # Create a unicast dsr message with proper values
         dsr_message = Messages.UnicastPacket()
@@ -155,73 +209,129 @@ class AppHandler:
         # Process the packet through the reward_wait_handler
         self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
 
-    # Send a packet to a next_hop_mac, if ARQ retransmission is enabled
+    ## Send a packet to a next_hop_mac, if ARQ retransmission is enabled.
+    # @param self The object pointer.
+    # @param packet Received raw packet from the virtual network interface.
+    # @param dst_ip Destination IP of the packet.
+    # @param next_hop_mac MAC address of a next hop node.
+    # @return None
     def send_packet_with_arq(self, packet, dst_ip, next_hop_mac):
         # Check if the packet should be transmitted reliably
         upper_proto, port_number = Transport.get_upper_proto_info(packet)
         if (upper_proto in ARQ_LIST) and (port_number in ARQ_LIST[upper_proto]):
             # Transmit the packet reliably
             DATA_LOG.debug("This packet should be transmitted reliably: %s, %s", upper_proto, port_number)
-
             # Create reliable dsr data message with proper values
             dsr_message = Messages.ReliableDataPacket()
             dsr_message.hop_count = 1
-
             # Send the message using ARQ
             self.arq_handler.arq_send(dsr_message, [next_hop_mac], payload=packet)
             # Process the packet through the reward_wait_handler
             self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
-
         # Else, transmit the data packet normally
         else:
             self.send_packet(packet, dst_ip, next_hop_mac)
 
-    # Send the packet back to the virtual network interface
+    ## Send the packet back to the virtual network interface.
+    # @param self The object pointer.
+    # @param packet Received raw packet from the virtual network interface.
+    # @return None
     def send_back(self, packet):
         self.app_transport.send_to_interface(packet)
 
-    # Send the data packet up to the application
+    ## Send the data packet up to the application
+    # @param self The object pointer.
+    # @param packet Received raw packet from the virtual network interface.
+    # @return None
     def send_up(self, packet):
         self.app_transport.send_to_app(packet)
 
 
-# A thread for receiving an incoming data from the real network interface.
+## A thread class for receiving incoming data from the real physical network interface.
 class IncomingTrafficHandler(threading.Thread):
+    ## Constructor.
+    # @param self The object pointer.
+    # @param app_handler_thread Reference to DataHandler.AppHandler object.
+    # @param neighbor_routine Reference to NeighborDiscovery.NeighborDiscovery object.
+    # @return None
     def __init__(self, app_handler_thread, neighbor_routine):
         super(IncomingTrafficHandler, self).__init__()
+        ## @var handle_data_packet
+        # Create a reference to default self.handle_data_packet method.
         # Check the MONITORING_MODE_FLAG.
-        # If True - override the self.handle_data_packet method for working in the monitoring mode.
+        # If True - override the self.handle_data_packet variable for working in the monitoring mode.
+        ## @var handle_reliable_data_packet
+        # Create a reference to default self.handle_reliable_data_packet method.
+        # Check the MONITORING_MODE_FLAG.
         # If True - override the self.handle_reliable_data_packet method for working in the monitoring mode.
-        # If True - override the self.rreq_handler and self.rrep_handler methods for working in the monitoring mode.
+        ## @var handle_rreq
+        # Create a reference to default self.handle_rreq method.
+        # Check the MONITORING_MODE_FLAG.
+        # If True - override the self.rreq_handler method for working in the monitoring mode.
+        ## @var handle_rrep
+        # Create a reference to default self.handle_rrep method.
+        # Check the MONITORING_MODE_FLAG.
+        # If True - override the self.rrep_handler method for working in the monitoring mode.
         if MONITORING_MODE_FLAG:
             self.handle_data_packet = self.handle_data_packet_monitoring_mode
             self.handle_reliable_data_packet = self.handle_reliable_data_packet_monitoring_mode
             self.handle_rreq = self.handle_rreq_monitoring_mode
             self.handle_rrep = self.handle_rrep_monitoring_mode
 
-        self.running = True
+        ## @var running
+        # Thread running state bool() flag.
+        self.running = False
+        ## @var app_handler_thread
+        # Reference to DataHandler.AppHandler object.
         self.app_handler_thread = app_handler_thread
+        ## @var raw_transport
+        # Reference to Transport.RawTransport object.
         self.raw_transport = self.app_handler_thread.raw_transport
+        ## @var arq_handler
+        # Reference to DataHandler.AppHandler.arq_handler object.
         self.arq_handler = app_handler_thread.arq_handler
-
+        ## @var path_discovery_handler
+        # Reference to DataHandler.AppHandler.path_discovery_handler object.
         self.path_discovery_handler = app_handler_thread.path_discovery_handler
-
+        ## @var listen_neighbors_handler
+        # Reference to NeighborDiscovery.NeighborDiscovery.listen_neighbors_handler object.
         self.listen_neighbors_handler = neighbor_routine.listen_neighbors_handler
+        ## @var table
+        # Reference to RouteTable.Table object.
         self.table = self.app_handler_thread.table
+        ## @var broadcast_list
+        # Reference to DataHandler.AppHandler.broadcast_list attribute.
         self.broadcast_list = app_handler_thread.broadcast_list
+        ## @var broadcast_mac
+        # Store the default MAC broadcast value, referenced from Transport.RawTransport.broadcast_mac.
         self.broadcast_mac = self.app_handler_thread.broadcast_mac
-        # Set a maximum number of hops a broadcast frame can be forwarded over
+        ## @var max_broadcast_ttl
+        # Set a maximum number of hops a broadcast frame can be forwarded over. Default value is 1.
         self.max_broadcast_ttl = 1
-
-        # Create a handler for generating and sending back a reward to the sender node
+        ## @var reward_send_handler
+        # Create a handler for generating and sending back a reward to the sender node.
         self.reward_send_handler = RewardHandler.RewardSendHandler(self.table, self.raw_transport)
+        ## @var reward_wait_handler
+        # Create a reference to RewardHandler.RewardWaitHandler object thread.
         self.reward_wait_handler = app_handler_thread.reward_wait_handler
+        ## @var rreq_ids
+        # List of all previously processed RREQ IDs.
+        # Limit the max length of the list to 100.
+        self.rreq_ids = deque(maxlen=100)
+        ## @var rrep_ids
+        # List of all previously processed RREP IDs.
+        # Limit the max length of the list to 100.
+        self.rrep_ids = deque(maxlen=100)
+        ## @var reliable_packet_ids
+        # List of all previously processed IDs of data packets have been sent reliably using ARQ.
+        # Limit the max length of the list to 100.
+        self.reliable_packet_ids = deque(maxlen=100)
 
-        self.rreq_ids = deque(maxlen=100)                       # Limit the max length of the list
-        self.rrep_ids = deque(maxlen=100)                       # Limit the max length of the list
-        self.reliable_packet_ids = deque(maxlen=100)            # Limit the max length of the list
-
+    ## Main thread routine.
+    # @param self The object pointer.
+    # @return None
     def run(self):
+        self.running = True
         while self.running:
             src_mac, dsr_message, packet = self.raw_transport.recv_data()
             dsr_type = dsr_message.type
@@ -263,10 +373,15 @@ class IncomingTrafficHandler(threading.Thread):
             else:
                 DATA_LOG.error("INVALID DSR TYPE NUMBER HAS BEEN RECEIVED!!!")
 
+    ## Default method for handling incoming unicast data packets from the network side.
     # Check the dst_mac from dsr_header. If it matches the node's own mac -> send it up to the virtual interface
-    # If the packet carries the data, either send it to the next hop, or,
-    # if there is no such one, put it to the AppQueue, or,
-    # if the dst_mac equals to the node's mac, send the packet up to the application
+    # If the packet carries the data, either send it to the next hop, or, if there is no such one, put it to the
+    # AppQueue, or, if the dst_mac equals to the node's mac, send the packet up to the application.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received packet.
+    # @param dsr_message RLRP unicast data packet header object from Messages module.
+    # @param packet Raw data packet.
+    # @return None
     def handle_data_packet(self, src_mac, dsr_message, packet):
         # Get src_ip, dst_ip from the incoming packet
         src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
@@ -298,8 +413,15 @@ class IncomingTrafficHandler(threading.Thread):
                 # Process the packet through the reward_wait_handler
                 self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
 
+    ## Method for handling incoming unicast data packets from the network if the application is running in the
+    # monitoring mode (conf.MONITORING_MODE_FLAG is set to True).
     # Handle data packet, if in monitoring mode. If the dst_mac is the mac of the receiving node,
-    # send the packet up to the application, otherwise, discard the packet
+    # send the packet up to the application, otherwise, discard the packet.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received packet.
+    # @param dsr_message RLRP unicast data packet header object from Messages module.
+    # @param packet Raw data packet.
+    # @return None
     def handle_data_packet_monitoring_mode(self, src_mac, dsr_message, packet):
         # Get src_ip, dst_ip from the incoming packet
         src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
@@ -317,7 +439,12 @@ class IncomingTrafficHandler(threading.Thread):
             DATA_LOG.debug("This data packet is not for me. Discarding the data packet, "
                            "since in Monitoring Mode. Dsr header: %s", dsr_message)
 
-    # Handle data packet, sent via ARQ
+    ## Handle data packet, sent via ARQ.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received packet.
+    # @param dsr_message RLRP unicast data packet header object from Messages module.
+    # @param packet Raw data packet.
+    # @return None
     def handle_reliable_data_packet(self, src_mac, dsr_message, packet):
         # Send back the ACK on the received packet in ALL cases
         self.arq_handler.send_ack(dsr_message, src_mac)
@@ -325,8 +452,7 @@ class IncomingTrafficHandler(threading.Thread):
         if dsr_message.id in self.reliable_packet_ids:
             # Send the ACK back anyway, but do nothing with the message itself
             DATA_LOG.info("The Data Packet with this ID has been already processed. Sending the ACK back.")
-
-            return 0
+            return None
 
         self.reliable_packet_ids.append(dsr_message.id)
 
@@ -360,7 +486,12 @@ class IncomingTrafficHandler(threading.Thread):
                 # Process the packet through the reward_wait_handler
                 self.reward_wait_handler.wait_for_reward(dst_ip, next_hop_mac)
 
-    # Handle data packet, sent via ARQ
+    ## Handle data packet, sent via ARQ, if the monitoring mode is ON.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received packet.
+    # @param dsr_message RLRP unicast data packet header object from Messages module.
+    # @param packet Raw data packet.
+    # @return None
     def handle_reliable_data_packet_monitoring_mode(self, src_mac, dsr_message, packet):
         # Send back the ACK on the received packet in ALL cases
         self.arq_handler.send_ack(dsr_message, src_mac)
@@ -368,8 +499,7 @@ class IncomingTrafficHandler(threading.Thread):
         if dsr_message.id in self.reliable_packet_ids:
             # Send the ACK back anyway, but do nothing with the message itself
             DATA_LOG.info("The Data Packet with this ID has been already processed. Sending the ACK back.")
-
-            return 0
+            return None
 
         self.reliable_packet_ids.append(dsr_message.id)
 
@@ -389,7 +519,12 @@ class IncomingTrafficHandler(threading.Thread):
             DATA_LOG.debug("This data packet is not for me. Discarding the data packet, "
                            "since in Monitoring Mode. Dsr header: %s", dsr_message)
 
-    # Check the broadcast_ttl with the defined max value, and either drop or forward it, accordingly
+    ## Handle the broadcast data packets, generated from the network application.
+    # Check the broadcast_ttl with the defined max value, and either drop or forward it, accordingly.
+    # @param self The object pointer.
+    # @param dsr_message RLRP broadcast data packet header object from Messages module.
+    # @param packet Raw data packet.
+    # @return None
     def handle_broadcast_packet(self, dsr_message, packet):
         # Check whether the packet with this particular broadcast_id has been previously received
         if dsr_message.id in self.broadcast_list:
@@ -415,6 +550,11 @@ class IncomingTrafficHandler(threading.Thread):
             dsr_message.broadcast_ttl += 1
             self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
 
+    ## Handle incoming RREQ messages.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received RREQ.
+    # @param rreq RLRP RREQ service message header object from Messages module.
+    # @return None
     def handle_rreq(self, src_mac, rreq):
         # Send back the ACK on the received RREQ in ALL cases
         self.arq_handler.send_ack(rreq, src_mac)
@@ -422,8 +562,7 @@ class IncomingTrafficHandler(threading.Thread):
         if rreq.id in self.rreq_ids:
             # Send the ACK back anyway, but do nothing with the message itself
             DATA_LOG.info("The RREQ with this ID has been already processed. Sending the ACK back.")
-
-            return 0
+            return None
 
         DATA_LOG.info("Processing RREQ")
 
@@ -462,8 +601,13 @@ class IncomingTrafficHandler(threading.Thread):
 
             self.arq_handler.arq_send(rreq, dst_mac_list)
 
-    # Handle RREQs if in Monitoring Mode. Process only the RREQs, which have been sent for them (dst_ip in node_ips)
+    ## Handle incoming RREQs if the Monitoring Mode is ON.
+    # Process only the RREQs, which have been sent for this node (dst_ip in node_ips).
     # Do not forward any other RREQs further.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received RREQ.
+    # @param rreq RLRP RREQ service message header object from Messages module.
+    # @return None
     def handle_rreq_monitoring_mode(self, src_mac, rreq):
         # Send back the ACK on the received RREQ in ALL cases
         self.arq_handler.send_ack(rreq, src_mac)
@@ -471,8 +615,7 @@ class IncomingTrafficHandler(threading.Thread):
         if rreq.id in self.rreq_ids:
             # Send the ACK back anyway, but do nothing with the message itself
             DATA_LOG.info("The RREQ with this ID has been already processed. Sending the ACK back.")
-
-            return 0
+            return None
 
         DATA_LOG.info("Processing RREQ")
 
@@ -502,6 +645,11 @@ class IncomingTrafficHandler(threading.Thread):
 
             DATA_LOG.info("This RREQ is not for me. Discarding RREQ, since in Monitoring Mode.")
 
+    ## Handle incoming RREP messages.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received RREQ.
+    # @param rrep RLRP RREP service message header object from Messages module.
+    # @return None
     def handle_rrep(self, src_mac, rrep):
         # Send back the ACK on the received RREP in ALL cases
         self.arq_handler.send_ack(rrep, src_mac)
@@ -509,8 +657,7 @@ class IncomingTrafficHandler(threading.Thread):
         if rrep.id in self.rrep_ids:
             # Send the ACK back anyway, but do nothing with the message itself
             DATA_LOG.info("The RREP with this ID has been already processed. Sending the ACK back.")
-
-            return 0
+            return None
 
         DATA_LOG.info("Processing RREP...")
 
@@ -540,8 +687,12 @@ class IncomingTrafficHandler(threading.Thread):
 
             self.arq_handler.arq_send(rrep, dst_mac_list)
 
-    # Handle incoming RREPs while in Monitoring Mode.
+    ## Handle incoming RREPs if the Monitoring Mode is ON.
     # Receive the RREPs, which have been sent to this node, discard all other RREPs.
+    # @param self The object pointer.
+    # @param src_mac Source MAC address of the received RREQ.
+    # @param rrep RLRP RREP service message header object from Messages module.
+    # @return None
     def handle_rrep_monitoring_mode(self, src_mac, rrep):
         # Send back the ACK on the received RREP in ALL cases
         self.arq_handler.send_ack(rrep, src_mac)
@@ -549,8 +700,7 @@ class IncomingTrafficHandler(threading.Thread):
         if rrep.id in self.rrep_ids:
             # Send the ACK back anyway, but do nothing with the message itself
             DATA_LOG.info("The RREP with this ID has been already processed. Sending the ACK back.")
-
-            return 0
+            return None
 
         DATA_LOG.info("Processing RREP...")
 
@@ -570,14 +720,23 @@ class IncomingTrafficHandler(threading.Thread):
         else:
             DATA_LOG.info("This RREP is not for me. Discarding RREP, since in Monitoring Mode.")
 
-    # Handling incoming ack messages
+    ## Handle incoming ACK messages.
+    # @param self The object pointer.
+    # @param ack_message RLRP ACK service message header object from Messages module.
+    # @return None
     def handle_ack(self, ack_message):
         # Process the ACK by arq_handler
         self.arq_handler.process_ack(ack_message)
 
-    # Handling incoming reward messages
+    ## Handle incoming reward messages.
+    # @param self The object pointer.
+    # @param reward_message RLRP reward service message header object from Messages module.
+    # @return None
     def handle_reward(self, reward_message):
         self.reward_wait_handler.set_reward(reward_message)
 
+    ## Stop and quit the thread operation.
+    # @param self The object pointer.
+    # @return None
     def quit(self):
         self.running = False

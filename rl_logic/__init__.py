@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 """
+@package rl_logic
 Created on Aug 1, 2016
 
 @author: Dmitrii Dugaev
@@ -27,32 +28,42 @@ The ActionSelector class provides methods for selecting the action based on the 
 estimation values.
 """
 
+# Import necessary python modules from the standard library
 import random
 from math import e
 
 
-# Class for assigning current estimated value for a given action.
-# Provides method for returning this value.
+## Class for assigning current estimated value for a given action and provides method for returning this value.
 class ValueEstimator:
+    ## Constructor
+    # @param self The object pointer.
+    # @param est_method_id Default calculation method of the estimation value
     def __init__(self, est_method_id="sample_average"):
+        ## @var actions
         # Store current action ids and their current estimated value and step: {action_id: [est_value, step_count]}
         self.actions = dict()
         # Override the default method
+        ## @var estimate_value
+        # A reference to the estimation method chosen by the est_method_id.
         if est_method_id == "sample_average":
             self.estimate_value = self.estimate_value_by_sample_average
         else:
             self.estimate_value = self.estimate_value_by_sample_average
 
+    ## Main method for estimation value calculation.
+    # It is being overridden in the constructor, depending on the chosen estimation method ID.
+    # Input: action_id - some action identifier; reward - value of the assigned reward.
+    # Output: current estimated value.
+    # @param self The object pointer.
     def estimate_value(self):
-        """
-        Main method which returns current estimated value. It is overridden in the init().
-        Input: action_id - some action identifier; reward - value of the assigned reward.
-        Output: current estimated value.
-        """
         pass
 
-    # Estimate value by using a simple "sample average" method.
-    # Reference to the method can be found in R.Sutton's book: Reinforcement Learning: An Introduction
+    ## Estimate value by using a simple "sample average" method.
+    # Reference to the method can be found in R.Sutton's book: Reinforcement Learning: An Introduction.
+    # @param self The object pointer.
+    # @param action_id ID of the action having been chosen.
+    # @param reward Reward value received on the corresponding action ID.
+    # @return Estimated value in float().
     def estimate_value_by_sample_average(self, action_id, reward):
         if action_id not in self.actions:
             # Assign initial values
@@ -70,23 +81,34 @@ class ValueEstimator:
         # Return the value
         return estimated_value
 
-    # Delete an action_id from the current actions list
+    ## Delete an action_id from the current actions list.
+    # @param self The object pointer.
+    # @param action_id ID of the action being deleted.
     def delete_action_id(self, action_id):
         if action_id in self.actions:
             del self.actions[action_id]
 
 
-# Class for selecting the action from the list of actions and their corresponding values.
+## Class for selecting the action from the list of actions and their corresponding values.
 # The interface is provided via select_action() method.
 class ActionSelector:
+    ## Constructor.
+    # @param self The object pointer.
+    # @param self ID of used selection method.
     def __init__(self, selection_method_id="greedy"):
         # Override the default method
+        ## @var select_action
+        # A reference to the selection method being used.
+        ## @var selection_method_id
+        # Store a selection method ID value.
         if selection_method_id == "greedy":
             self.select_action = self.select_action_greedy
             self.selection_method_id = "greedy"
 
         elif selection_method_id == "e-greedy":
             # Set some parameters of e-greedy method
+            ## @var eps
+            # Eps-value for the e-greedy selection method. Default value is 0.1.
             self.eps = 0.1
             self.select_action = self.select_action_e_greedy
             self.selection_method_id = "e-greedy"
@@ -99,22 +121,28 @@ class ActionSelector:
             self.select_action = self.select_action_greedy
             self.selection_method_id = "greedy"
 
+    ## Default method for selecting the action.
+    # It is overridden in init().
+    # Input: {action_id: value}.
+    # Output: action_id.
+    # @param self The object pointer.
     def select_action(self):
-        """
-        Default method for selecting the action. It is overridden in init().
-        Input: {action_id: value}
-        Output: action_id
-        """
         pass
 
-    # Select an action using "greedy" algorithm
+    ## Select an action using "greedy" algorithm.
+    # @param self The object pointer.
+    # @param action_values A dictionary containing {action_id: estimation_value}.
+    # @return The action_id with the maximum value.
     def select_action_greedy(self, action_values):
         if len(action_values) == 0:
             return None
         # Simply return the action_id with the maximum value
         return max(action_values, key=action_values.get)
 
-    # Select an action using "e-greedy" algorithm
+    ## Select an action using "e-greedy" algorithm.
+    # @param self The object pointer.
+    # @param action_values A dictionary containing {action_id: estimation_value}.
+    # @return The selected action_id.
     def select_action_e_greedy(self, action_values):
         if len(action_values) == 0:
             return None
@@ -131,8 +159,11 @@ class ActionSelector:
                 chosen_action_id = random.choice(action_values.keys())
             return chosen_action_id
 
-    # Select an action using "soft-max" algorithm. It is based on Gibbs (Boltzmann) distribution.
+    ## Select an action using "soft-max" algorithm, based on Gibbs (Boltzmann) distribution.
     # See the reference in R.Sutton's book: Reinforcement Learning: An Introduction.
+    # @param self The object pointer.
+    # @param action_values A dictionary containing {action_id: estimation_value}.
+    # @return The selected action_id.
     def select_action_softmax(self, action_values):
         if len(action_values) == 0:
             return None
@@ -146,13 +177,11 @@ class ActionSelector:
             denominator = 0.0
             for v in values:
                 denominator += pow(e, (v / tau))
-
             # Calculate a numerator for each value, divide it by the denominator and append the result to
             # probabilities list
             for v in values:
                 numerator = pow(e, (v / tau))
                 probabilities.append(numerator / denominator)
-
             return probabilities
 
         # Returns a random item according to its weight. Items: {action: weight}
@@ -171,8 +200,6 @@ class ActionSelector:
 
         # Calculate weights for each action value
         action_weights = calc_gibbs_boltzmann(action_values.values())
-
         # Select an action
         action = weighted_choice(dict(zip(action_values.keys(), action_weights)))
-
         return action
