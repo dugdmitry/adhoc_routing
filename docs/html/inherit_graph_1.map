@@ -1,8 +1,0 @@
-<map id="Graphical Class Hierarchy" name="Graphical Class Hierarchy">
-<area shape="rect" id="node2" href="$class_arq_handler_1_1_arq_routine.html" title="A routine ARQ thread class which is responsible for sending the given message/data periodically in a ..." alt="" coords="139,5,295,32"/>
-<area shape="rect" id="node3" href="$class_data_handler_1_1_incoming_traffic_handler.html" title="A thread class for receiving incoming data from the real physical network interface. " alt="" coords="123,57,312,98"/>
-<area shape="rect" id="node4" href="$class_neighbor_discovery_1_1_advertise_neighbor.html" title="Class for periodically broadcasting HELLO message from the node. " alt="" coords="121,122,313,163"/>
-<area shape="rect" id="node5" href="$class_reward_handler_1_1_reward_wait_thread.html" title="Thread for waiting for an incoming reward messages on the given dst_ip. " alt="" coords="123,187,311,229"/>
-<area shape="rect" id="node6" href="$classrouting__logging_1_1_logging_handler.html" title="A thread class which performs all writing operations to the given logging instance. " alt="" coords="116,253,319,280"/>
-<area shape="rect" id="node7" href="$class_transport_1_1_uds_server.html" title="Unix Domain Socket (UDS) server class. " alt="" coords="146,304,289,331"/>
-</map>

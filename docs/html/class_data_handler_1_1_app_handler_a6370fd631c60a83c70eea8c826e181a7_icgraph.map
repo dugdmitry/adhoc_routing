@@ -1,3 +1,0 @@
-<map id="DataHandler.AppHandler.send_packet" name="DataHandler.AppHandler.send_packet">
-<area shape="rect" id="node2" href="$class_data_handler_1_1_app_handler.html#af0240bc89c7bf1f5e14bfbff0b5c0380" title="Send a packet to a next_hop_mac, if ARQ retransmission is enabled. " alt="" coords="252,5,451,47"/>
-</map>

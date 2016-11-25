@@ -1,5 +1,0 @@
-<map id="NeighborDiscovery.AdvertiseNeighbor.send_raw_hello" name="NeighborDiscovery.AdvertiseNeighbor.send_raw_hello">
-<area shape="rect" id="node2" href="$class_neighbor_discovery_1_1_advertise_neighbor.html#a85d92ff7bfae2be54b23325b3c4060f4" title="Main thread routine. " alt="" coords="245,5,437,47"/>
-<area shape="rect" id="node3" href="$class_node__init_1_1_daemon.html#a3d7934df4dfab2f1be0bd5c1f38679dd" title="Start the daemon. " alt="" coords="485,13,645,39"/>
-<area shape="rect" id="node4" href="$class_node__init_1_1_daemon.html#a338d4d41f7b28228d57ae45273dba3ba" title="Restart the daemon. " alt="" coords="693,13,864,39"/>
-</map>

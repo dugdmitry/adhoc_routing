@@ -1,4 +1,0 @@
-<map id="NeighborDiscovery.AdvertiseNeighbor.send_raw_hello" name="NeighborDiscovery.AdvertiseNeighbor.send_raw_hello">
-<area shape="rect" id="node2" href="$namespace_transport.html#a0d5b251db3d6875d17cef0fb6ac8c43f" title="Get L3 addresses from the network interface. " alt="" coords="269,5,451,47"/>
-<area shape="rect" id="node3" href="$class_neighbor_discovery_1_1_advertise_neighbor.html#ac82384b081c5e174b785da11616cfcb4" title="Update node&#39;s own ips in the route table. " alt="" coords="245,71,475,112"/>
-</map>

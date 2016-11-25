@@ -1,5 +1,0 @@
-<map id="DataHandler.IncomingTrafficHandler.handle_reward" name="DataHandler.IncomingTrafficHandler.handle_reward">
-<area shape="rect" id="node2" href="$class_data_handler_1_1_incoming_traffic_handler.html#a59528066ef43720b59ffa06449fb5938" title="Main thread routine. " alt="" coords="243,5,432,47"/>
-<area shape="rect" id="node3" href="$class_node__init_1_1_daemon.html#a3d7934df4dfab2f1be0bd5c1f38679dd" title="Start the daemon. " alt="" coords="480,13,640,39"/>
-<area shape="rect" id="node4" href="$class_node__init_1_1_daemon.html#a338d4d41f7b28228d57ae45273dba3ba" title="Restart the daemon. " alt="" coords="688,13,859,39"/>
-</map>

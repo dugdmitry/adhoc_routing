@@ -1,4 +1,0 @@
-<map id="Transport.RawTransport.recv_data_with_filter" name="Transport.RawTransport.recv_data_with_filter">
-<area shape="rect" id="node2" href="$class_transport_1_1_raw_transport.html#af42a49539a8c84c993352228b8f070ea" title="Get source MAC address from the given ethernet header. " alt="" coords="247,5,432,47"/>
-<area shape="rect" id="node3" href="$namespace_messages.html#a0c6bcaef074870dfafa8685c8553adb5" title="Unpack the Message object from the dsr header&#39; bytearray value. " alt="" coords="245,71,433,98"/>
-</map>
