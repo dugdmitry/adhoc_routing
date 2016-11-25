@@ -123,3 +123,6 @@ Dmitrii Dugaev – [@linkedin](https://www.linkedin.com/in/ddugaev) – dugdmitr
 Distributed under the Apache 2.0 license. See ``LICENSE`` for more information.
 
 [https://github.com/dugdmitry/adhoc_routing](https://github.com/dugdmitry/adhoc_routing)
+
+Doxygen code documentation:
+[https://dugdmitry.github.io/adhoc_routing/](https://dugdmitry.github.io/adhoc_routing/)
