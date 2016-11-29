@@ -126,3 +126,6 @@ Distributed under the Apache 2.0 license. See ``LICENSE`` for more information.
 
 Doxygen code documentation:
 [https://dugdmitry.github.io/adhoc_routing/](https://dugdmitry.github.io/adhoc_routing/)
+
+Wiki page:
+[https://github.com/dugdmitry/adhoc_routing/wiki](https://github.com/dugdmitry/adhoc_routing/wiki)
