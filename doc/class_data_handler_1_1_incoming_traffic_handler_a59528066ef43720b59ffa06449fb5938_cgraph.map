@@ -1,0 +1,5 @@
+<map id="DataHandler.IncomingTrafficHandler.run" name="DataHandler.IncomingTrafficHandler.run">
+<area shape="rect" id="node2" href="$class_data_handler_1_1_incoming_traffic_handler.html#ad43ae6b4a7db9c854a0e2905471bd53b" title="Handle the broadcast data packets, generated from the network application. " alt="" coords="243,5,461,47"/>
+<area shape="rect" id="node3" href="$class_data_handler_1_1_incoming_traffic_handler.html#af02d49dacc8cedf94aa019e320133ab4" title="Handle incoming ACK messages. " alt="" coords="257,71,447,112"/>
+<area shape="rect" id="node4" href="$class_data_handler_1_1_incoming_traffic_handler.html#a2bb85ffd8a3b17395827bcc16dc5c501" title="Handle incoming reward messages. " alt="" coords="257,136,447,177"/>
+</map>

@@ -1,0 +1,5 @@
+<map id="ArqHandler.ArqRoutine.quit" name="ArqHandler.ArqRoutine.quit">
+<area shape="rect" id="node2" href="$class_arq_handler_1_1_arq_routine.html#a7214471d13b22916814fb8997c0de850" title="Main thread routine. " alt="" coords="235,5,413,32"/>
+<area shape="rect" id="node3" href="$class_node__init_1_1_daemon.html#a3d7934df4dfab2f1be0bd5c1f38679dd" title="Start the daemon. " alt="" coords="461,5,621,32"/>
+<area shape="rect" id="node4" href="$class_node__init_1_1_daemon.html#a338d4d41f7b28228d57ae45273dba3ba" title="Restart the daemon. " alt="" coords="669,5,840,32"/>
+</map>
