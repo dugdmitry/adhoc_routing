@@ -1,5 +1,0 @@
-<map id="NeighborDiscovery.AdvertiseNeighbor.run" name="NeighborDiscovery.AdvertiseNeighbor.run">
-<area shape="rect" id="node2" href="$class_neighbor_discovery_1_1_advertise_neighbor.html#ab1c3f4a75cbeefbedb35c370d211cf99" title="Broadcast the HELLO message frame to the network. " alt="" coords="245,39,437,80"/>
-<area shape="rect" id="node3" href="$namespace_transport.html#a0d5b251db3d6875d17cef0fb6ac8c43f" title="Get L3 addresses from the network interface. " alt="" coords="509,5,691,47"/>
-<area shape="rect" id="node4" href="$class_neighbor_discovery_1_1_advertise_neighbor.html#ac82384b081c5e174b785da11616cfcb4" title="Update node&#39;s own ips in the route table. " alt="" coords="485,71,715,112"/>
-</map>

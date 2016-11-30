@@ -1,4 +1,0 @@
-<map id="ArqHandler.ArqRoutine.run" name="ArqHandler.ArqRoutine.run">
-<area shape="rect" id="node2" href="$class_arq_handler_1_1_arq_routine.html#a9fe50a17d7193ca81538ad39a8ffea5d" title="Send message with the dsr header to the dst_address. " alt="" coords="232,5,452,32"/>
-<area shape="rect" id="node3" href="$class_arq_handler_1_1_arq_routine.html#abda6a0a25b26b413469e988e9e8af0f7" title="Stop and quit the thread operation. " alt="" coords="251,56,433,83"/>
-</map>

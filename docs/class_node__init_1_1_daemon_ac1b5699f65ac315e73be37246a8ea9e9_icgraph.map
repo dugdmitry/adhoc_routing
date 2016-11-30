@@ -1,5 +1,0 @@
-<map id="Node_init.Daemon.del_pid" name="Node_init.Daemon.del_pid">
-<area shape="rect" id="node2" href="$class_node__init_1_1_daemon.html#a18d0fe38c5eef468527733710a42761f" title="Daemonize the process and do all the routine related to that. " alt="" coords="228,5,425,32"/>
-<area shape="rect" id="node3" href="$class_node__init_1_1_daemon.html#a3d7934df4dfab2f1be0bd5c1f38679dd" title="Start the daemon. " alt="" coords="473,5,633,32"/>
-<area shape="rect" id="node4" href="$class_node__init_1_1_daemon.html#a338d4d41f7b28228d57ae45273dba3ba" title="Restart the daemon. " alt="" coords="681,5,852,32"/>
-</map>

@@ -1,4 +1,0 @@
-<map id="Messages.unpack_message" name="Messages.unpack_message">
-<area shape="rect" id="node2" href="$class_transport_1_1_raw_transport.html#ae807bf6910f57ebf275e06044953d072" title="Receive frames with filtering. " alt="" coords="241,5,433,47"/>
-<area shape="rect" id="node3" href="$class_transport_1_1_raw_transport.html#a558da3f8d511759a531ceae9d98bb833" title="Receive all frames without filtering. " alt="" coords="241,71,433,112"/>
-</map>

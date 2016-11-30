@@ -1,6 +1,0 @@
-<map id="Transport.get_l3_addresses_from_interface" name="Transport.get_l3_addresses_from_interface">
-<area shape="rect" id="node2" href="$class_neighbor_discovery_1_1_advertise_neighbor.html#ab1c3f4a75cbeefbedb35c370d211cf99" title="Broadcast the HELLO message frame to the network. " alt="" coords="236,5,428,47"/>
-<area shape="rect" id="node3" href="$class_neighbor_discovery_1_1_advertise_neighbor.html#a85d92ff7bfae2be54b23325b3c4060f4" title="Main thread routine. " alt="" coords="476,5,668,47"/>
-<area shape="rect" id="node4" href="$class_node__init_1_1_daemon.html#a3d7934df4dfab2f1be0bd5c1f38679dd" title="Start the daemon. " alt="" coords="716,13,876,39"/>
-<area shape="rect" id="node5" href="$class_node__init_1_1_daemon.html#a338d4d41f7b28228d57ae45273dba3ba" title="Restart the daemon. " alt="" coords="924,13,1095,39"/>
-</map>
