@@ -1,3 +1,0 @@
-#!/bin/sh
-python_daemon="/usr/share/adhoc_routing/Node_init.py"
-$python_daemon $1
