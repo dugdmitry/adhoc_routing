@@ -50,7 +50,7 @@ class Manager(threading.Thread):
     def run(self):
         self.running = True
         while self.running:
-            request = self.sock.recv(16)[0]
+            request = self.sock.recvfrom(4096)[0]
             request = request.split(":")
             if request[0] == "0":
                 self.flush_table()
