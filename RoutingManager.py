@@ -43,6 +43,7 @@ class Manager(threading.Thread):
         self.sock.bind(self.server_address)
         # Listen for incoming connections
         self.sock.listen(1)
+        self.connection = self.sock.accept()[0]
 
     ## Main thread routine. Receives and processes messages from the UDS.
     # @param self The object pointer.
@@ -50,9 +51,9 @@ class Manager(threading.Thread):
     def run(self):
         self.running = True
         while self.running:
-            connection = self.sock.accept()[0]
+            self.connection = self.sock.accept()[0]
             # request = self.sock.recvfrom(4096)[0]
-            request = connection.recv(4096)
+            request = self.connection.recv(4096)
             request = request.split(":")
             if request[0] == "0":
                 self.flush_table()
@@ -95,7 +96,8 @@ class Manager(threading.Thread):
     def get_neighbors(self):
         neighbors = self.table.get_neighbors_l3_addresses()
         # Send the pickled data back to the client
-        self.sock.send(pickle.dumps(neighbors))
+        # self.sock.sendall(pickle.dumps(neighbors))
+        self.connection.sendall(pickle.dumps(neighbors))
 
     ## Stop and quit the thread operation.
     # @param self The object pointer.
