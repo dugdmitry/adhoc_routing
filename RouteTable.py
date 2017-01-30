@@ -191,10 +191,10 @@ class Table:
         else:
             return None
 
-    ## Print out the contents of the route table to a specified file.
+    ## Safe-copy and return a current list of entries.
     # @param self The object pointer.
-    # @return None
-    def print_table(self):
+    # @param return list() of entries.
+    def get_list_of_entries(self):
         current_keys = self.entries_list.keys()
         current_values = self.entries_list.values()
 
@@ -202,7 +202,37 @@ class Table:
             current_keys = self.entries_list.keys()
             current_values = self.entries_list.values()
 
-        current_entries_list = dict(zip(current_keys, current_values))
+        return dict(zip(current_keys, current_values))
+
+    ## Safe-copy and return a list with L3 addresses of current neighbors.
+    # @param self The object pointer.
+    # @param return list() of L3 addresses.
+    def get_neighbors_l3_addresses(self):
+        # Make a safe-copy of the current list of neighbors
+        keys = self.neighbors_list.keys()
+        values = self.neighbors_list.values()
+
+        while len(keys) != len(values):
+            keys = self.neighbors_list.keys()
+            values = self.neighbors_list.values()
+
+        neighbors_list = dict(zip(keys, values))
+
+        # Create a list with L3 addresses of each neighbor in a format: [[addr1, ... addrN], ... [addr1, ... addrN]]
+        addresses_list = []
+        for mac in neighbors_list:
+            addresses_list.append([])
+            for addr in neighbors_list[mac].l3_addresses:
+                if addr:
+                    addresses_list[-1].append(addr)
+
+        return addresses_list
+
+    ## Print out the contents of the route table to a specified file.
+    # @param self The object pointer.
+    # @return None
+    def print_table(self):
+        current_entries_list = self.get_list_of_entries()
 
         f = open(ABSOLUTE_PATH + self.table_filename, "w")
         f.write("-" * 90 + "\n")

@@ -233,9 +233,11 @@ class ListenNeighbors:
         if (time.time() - self.last_expiry_check) > self.expiry_interval:
             self.check_expired_neighbors()
             self.last_expiry_check = time.time()
+
         if src_mac == self.node_mac:
             NEIGHBOR_LOG.warning("Neighbor has the same mac address as mine! %s", self.node_mac)
             return False
+
         if src_mac not in self.neighbors_list:
             neighbor = Neighbor()
 
@@ -299,7 +301,6 @@ class ListenNeighbors:
     # @return None
     def add_neighbor_entry(self, neighbor):
         NEIGHBOR_LOG.info("Adding a new neighbor: %s", str(neighbor.mac))
-
         self.neighbors_list.update({neighbor.mac: neighbor})
 
     # Delete the neighbor entry from the shared dictionary
