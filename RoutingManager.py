@@ -39,8 +39,10 @@ class Manager(threading.Thread):
         subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)
         ## @var sock
         # Create a UDS socket.
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.bind(self.server_address)
+        # Listen for incoming connections
+        self.sock.listen(1)
 
     ## Main thread routine. Receives and processes messages from the UDS.
     # @param self The object pointer.
@@ -48,7 +50,7 @@ class Manager(threading.Thread):
     def run(self):
         self.running = True
         while self.running:
-            request = self.sock.recvfrom(4096)[0]
+            request = self.sock.recv(4096)[0]
             request = request.split(":")
             if request[0] == "0":
                 self.flush_table()
