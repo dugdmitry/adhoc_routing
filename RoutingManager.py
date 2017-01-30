@@ -43,7 +43,7 @@ class Manager(threading.Thread):
         self.sock.bind(self.server_address)
         # Listen for incoming connections
         self.sock.listen(1)
-        self.connection = self.sock.accept()[0]
+        self.connection = 0
 
     ## Main thread routine. Receives and processes messages from the UDS.
     # @param self The object pointer.
