@@ -202,7 +202,7 @@ class Table:
             current_keys = self.entries_list.keys()
             current_values = self.entries_list.values()
 
-        map(dict, current_values)
+        current_values = map(dict, current_values)
 
         return dict(zip(current_keys, current_values))
 
