@@ -19,6 +19,7 @@ import atexit
 from signal import SIGINT, SIGTERM
 
 # Import the necessary modules of the program
+import RoutingManager
 import DataHandler
 import RouteTable
 import Transport
@@ -213,17 +214,15 @@ class RoutingDaemon(Daemon):
         # Create data handler thread to process all incoming and outgoing messages
         data_handler = DataHandler.DataHandler(app_transport, raw_transport, table)
 
-        # Deactivated for now
-        # # Creating thread for live configuration / interaction with the running program
-        # uds_server = Transport.UdsServer(UDS_ADDRESS)
+        # Creating thread for live configuration / interaction with the running program
+        uds_server = RoutingManager.Manager(table)
 
         try:
             # Start data handler thread
             data_handler.run()
 
-            # Deactivated for now
-            # # Start uds_server thread
-            # uds_server.start()
+            # Start uds_server thread
+            uds_server.start()
 
             while True:
                 packet = app_transport.recv_from_app()
@@ -234,11 +233,10 @@ class RoutingDaemon(Daemon):
             # Stop the handlers
             data_handler.stop_threads()
 
-            # Deactivated for now
-            # # Stop UDS server
-            # uds_server.quit()
+            # Stop UDS server
+            uds_server.quit()
 
-            # # Stop the log thread
+            # Stop the log thread
             routing_logging.stop_log_thread()
 
         return 0
