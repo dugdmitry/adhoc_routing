@@ -202,7 +202,7 @@ class Table:
             current_keys = self.entries_list.keys()
             current_values = self.entries_list.values()
 
-        return dict(zip(current_keys, current_values))
+        return dict(zip(current_keys, dict(current_values)))
 
     ## Safe-copy and return a list with L3 addresses of current neighbors.
     # @param self The object pointer.

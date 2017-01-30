@@ -43,7 +43,7 @@ class Manager(threading.Thread):
         self.sock.bind(self.server_address)
         # Listen for incoming connections
         self.sock.listen(1)
-        self.connection = 0
+        self.connection = None
 
     ## Main thread routine. Receives and processes messages from the UDS.
     # @param self The object pointer.
@@ -88,7 +88,8 @@ class Manager(threading.Thread):
     def get_table(self):
         table_data = self.table.get_list_of_entries()
         # Send the pickled data back to the client
-        self.sock.sendall(pickle.dumps(table_data))
+        # self.sock.sendall(pickle.dumps(table_data))
+        self.connection.sendall(pickle.dumps(table_data))
 
     ## Get and return all the current neighbors of the node.
     # @param self
