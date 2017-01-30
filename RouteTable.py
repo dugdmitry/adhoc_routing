@@ -202,6 +202,9 @@ class Table:
             current_keys = self.entries_list.keys()
             current_values = self.entries_list.values()
 
+        # This is needed to simply a further (de-)serialization of this data structure. Otherwise, the list of
+        # current_values would contain the custom Entry() objects, which are difficult to de-serialize on the other
+        # side, without knowing their structure.
         current_values = map(dict, current_values)
 
         return dict(zip(current_keys, current_values))

@@ -6,9 +6,14 @@ Created on Jan 26, 2017
 @author: Dmitrii Dugaev
 
 
-Module Description.
+This module implements an external interface for interaction with the running routing daemon. The communication is done
+via command-exchange procedure through the Unix Domain Socket (UDS) interface.
+In the future, it can be also implemented via file I/O access, and so on.
+
+Currently, the following command IDs are supported:
+2 - get_table - returns a dictionary with current routing table;
+3 - get_neighbors - returns a list L3 addresses of current neighbors of the node.
 """
-# TODO: write a description of the module.
 
 
 # Import necessary python modules from the standard library
@@ -52,7 +57,6 @@ class Manager(threading.Thread):
         self.running = True
         while self.running:
             self.connection = self.sock.accept()[0]
-            # request = self.sock.recvfrom(4096)[0]
             request = self.connection.recv(4096)
             request = request.split(":")
             if request[0] == "0":
@@ -88,7 +92,6 @@ class Manager(threading.Thread):
     def get_table(self):
         table_data = self.table.get_list_of_entries()
         # Send the pickled data back to the client
-        # self.sock.sendall(pickle.dumps(table_data))
         self.connection.sendall(pickle.dumps(table_data))
 
     ## Get and return all the current neighbors of the node.
@@ -97,7 +100,6 @@ class Manager(threading.Thread):
     def get_neighbors(self):
         neighbors = self.table.get_neighbors_l3_addresses()
         # Send the pickled data back to the client
-        # self.sock.sendall(pickle.dumps(neighbors))
         self.connection.sendall(pickle.dumps(neighbors))
 
     ## Stop and quit the thread operation.
