@@ -91,7 +91,7 @@ class Manager(threading.Thread):
     def get_neighbors(self):
         neighbors = self.table.get_neighbors_l3_addresses()
         # Send the pickled data back to the client
-        self.sock.sendall(pickle.dumps(neighbors))
+        self.sock.send(pickle.dumps(neighbors))
 
     ## Stop and quit the thread operation.
     # @param self The object pointer.
