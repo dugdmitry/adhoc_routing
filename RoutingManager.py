@@ -52,7 +52,7 @@ class Manager(threading.Thread):
         self.sock.bind(self.server_address)
 
         # Listen for incoming connections
-        self.sock.listen(1)
+        self.sock.listen(5)
         self.connection = None
 
     ## Main thread routine. Receives and processes messages from the UDS.
@@ -63,7 +63,6 @@ class Manager(threading.Thread):
         self.connection = self.sock.accept()[0]
 
         while self.running:
-            # self.connection = self.sock.accept()[0]
             request = self.connection.recv(1024)
 
             MANAGER_LOG.debug("Got request from UDS socket: %s", request)
