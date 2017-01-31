@@ -91,19 +91,19 @@ class Manager(threading.Thread):
         MANAGER_LOG.debug("MAIN LOOP IS FINISHED.")
 
     ## Flush all the entries of the current routing table.
-    # @param self
+    # @param self The object pointer.
     # @return 0 - Success, 1 - Error
     def flush_table(self):
         pass
 
     ## Flush all the current neighbors of the node.
-    # @param self
+    # @param self The object pointer.
     # @return 0 - Success, 1 - Error
     def flush_neighbors(self):
         pass
 
     ## Get and return all the entries of the current routing table.
-    # @param self
+    # @param self The object pointer.
     # @return Pickled dict() of the routing table, 1 - Error
     def get_table(self):
         table_data = self.table.get_list_of_entries()
@@ -111,7 +111,7 @@ class Manager(threading.Thread):
         self.connection.sendall(pickle.dumps(table_data))
 
     ## Get and return all the current neighbors of the node.
-    # @param self
+    # @param self The object pointer.
     # @return 0 - Pickled list() of the L3 addresses of the neighbors, 1 - Error
     def get_neighbors(self):
         neighbors = self.table.get_neighbors_l3_addresses()
