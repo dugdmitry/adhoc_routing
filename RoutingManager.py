@@ -23,6 +23,10 @@ import socket
 import pickle
 import os
 
+import routing_logging
+
+MANAGER_LOG = routing_logging.create_routing_log("routing.manager.log", "manager")
+
 
 ## A manager thread which listens for the incoming requests from the established UDS socket.
 class Manager(threading.Thread):
@@ -58,6 +62,9 @@ class Manager(threading.Thread):
         while self.running:
             self.connection = self.sock.accept()[0]
             request = self.connection.recv(4096)
+
+            MANAGER_LOG.debug("Got request from UDS socket: %s", request)
+
             request = request.split(":")
             if request[0] == "0":
                 self.flush_table()
