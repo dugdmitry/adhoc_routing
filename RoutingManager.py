@@ -79,8 +79,11 @@ class Manager(threading.Thread):
             elif request[0] == "3":
                 self.get_neighbors()
 
+            elif request[0] == "":
+                MANAGER_LOG.info("Got empty string from socket. Client has been disconnected.")
+
             else:
-                print "Unknown command!", request[0], type(request[0])
+                MANAGER_LOG.info("Unknown command! %s", request[0])
 
     ## Flush all the entries of the current routing table.
     # @param self
