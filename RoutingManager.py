@@ -62,7 +62,7 @@ class Manager(threading.Thread):
         self.running = True
         while self.running:
             self.connection = self.sock.accept()[0]
-            request = self.connection.recv(4096)
+            request = self.connection.recv(1024)
 
             MANAGER_LOG.debug("Got request from UDS socket: %s", request)
 
