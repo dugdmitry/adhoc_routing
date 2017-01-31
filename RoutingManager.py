@@ -51,8 +51,6 @@ class Manager(threading.Thread):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.bind(self.server_address)
 
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
         # Listen for incoming connections
         self.sock.listen(1)
         self.connection = None
