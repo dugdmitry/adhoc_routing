@@ -53,14 +53,13 @@ class Manager(threading.Thread):
 
         # Listen for incoming connections
         self.sock.listen(5)
-        self.connection = None
+        self.connection = self.sock.accept()[0]
 
     ## Main thread routine. Receives and processes messages from the UDS.
     # @param self The object pointer.
     # @return None
     def run(self):
         self.running = True
-        self.connection = self.sock.accept()[0]
 
         while self.running:
             request = self.connection.recv(1024)
@@ -82,6 +81,8 @@ class Manager(threading.Thread):
 
             elif request[0] == "":
                 MANAGER_LOG.info("Got empty string from socket. Client has been disconnected.")
+                # Get new connection
+                self.connection = self.sock.accept()
 
             else:
                 MANAGER_LOG.info("Unknown command! %s", request[0])
