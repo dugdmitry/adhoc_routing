@@ -83,10 +83,12 @@ class Manager(threading.Thread):
             elif request[0] == "":
                 MANAGER_LOG.info("Got empty string from socket. Client has been disconnected.")
                 # Wait until new client connects
-                self.connection = self.sock.accept()
+                self.connection = self.sock.accept()[0]
 
             else:
                 MANAGER_LOG.info("Unknown command! %s", request[0])
+
+        MANAGER_LOG.debug("MAIN LOOP IS FINISHED.")
 
     ## Flush all the entries of the current routing table.
     # @param self
