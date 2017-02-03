@@ -58,9 +58,11 @@ class PathDiscoveryHandler:
             # Check if the timeout has been reached
             if (time.time() - self.creation_timestamps[dst_ip]) > self.entry_deletion_timeout:
                 # If yes, Delete the entry with all delayed packets
-                del self.delayed_packets_list[dst_ip]
+                # del self.delayed_packets_list[dst_ip]
+                self.delayed_packets_list.pop(dst_ip, None)
                 # Delete the timestamp
-                del self.creation_timestamps[dst_ip]
+                # del self.creation_timestamps[dst_ip]
+                self.creation_timestamps.pop(dst_ip, None)
                 # Run path discovery for the current packet again
                 self.run_path_discovery(src_ip, dst_ip, packet)
 
@@ -78,8 +80,8 @@ class PathDiscoveryHandler:
             self.creation_timestamps.update({dst_ip: time.time()})
             # Send RREQ
             self.send_rreq(src_ip, dst_ip)
-            # Set the timestamp
-            self.creation_timestamps[dst_ip] = time.time()
+            # # Set the timestamp
+            # self.creation_timestamps[dst_ip] = time.time()
 
     ## Generate and send RREQ message.
     # @param self The object pointer.
@@ -106,14 +108,18 @@ class PathDiscoveryHandler:
         PATH_DISCOVERY_LOG.info("Got RREP. Deleting RREQ thread...")
 
         if src_ip in self.delayed_packets_list:
+            packets = list(self.delayed_packets_list[src_ip])
             # Send the packets back to original app_queue
-            for packet in self.delayed_packets_list[src_ip]:
+            # for packet in self.delayed_packets_list[src_ip]:
+            for packet in packets:
                 PATH_DISCOVERY_LOG.info("Putting delayed packets back to app_queue...")
                 PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", src_ip)
 
                 self.app_transport.send_to_interface(packet)
 
             # Delete the entry
-            del self.delayed_packets_list[src_ip]
+            # del self.delayed_packets_list[src_ip]
+            self.delayed_packets_list.pop(src_ip, None)
             # Delete the timestamp
-            del self.creation_timestamps[src_ip]
+            # del self.creation_timestamps[src_ip]
+            self.creation_timestamps.pop(src_ip, None)

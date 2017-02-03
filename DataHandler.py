@@ -69,7 +69,6 @@ class DataHandler:
     def stop_threads(self):
         self.neighbor_routine.stop_threads()
         self.incoming_traffic_handler_thread.quit()
-
         DATA_LOG.info("Traffic handlers are stopped")
 
 
@@ -183,7 +182,6 @@ class AppHandler:
         # In that case, start a PathDiscovery procedure
         elif next_hop_mac is None:
             DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
-
             # ## Initiate PathDiscovery procedure for the given packet ## #
             self.path_discovery_handler.run_path_discovery(src_ip, dst_ip, packet)
 
@@ -528,13 +526,11 @@ class IncomingTrafficHandler(threading.Thread):
     def handle_broadcast_packet(self, dsr_message, packet):
         # Check whether the packet with this particular broadcast_id has been previously received
         if dsr_message.id in self.broadcast_list:
-
             # Just ignore it
             DATA_LOG.debug("Dropped broadcast id: %s", dsr_message.id)
 
         # Check whether the broadcast packet has reached the maximum established broadcast ttl
         elif dsr_message.broadcast_ttl > self.max_broadcast_ttl:
-
             # Just ignore it
             DATA_LOG.debug("Dropped broadcast id due to max_ttl: %s", dsr_message.id)
 
@@ -565,16 +561,13 @@ class IncomingTrafficHandler(threading.Thread):
             return None
 
         DATA_LOG.info("Processing RREQ")
-
         self.rreq_ids.append(rreq.id)
 
         # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
         self.table.update_entry(rreq.src_ip, src_mac, round(50.0 / rreq.hop_count, 2))
 
         if rreq.dst_ip in self.table.current_node_ips:
-
             DATA_LOG.info("Processing the RREQ, generating and sending back the RREP broadcast")
-
             # Generate and send RREP back to the source
             rrep = Messages.RrepMessage()
             rrep.src_ip = rreq.dst_ip
@@ -584,13 +577,10 @@ class IncomingTrafficHandler(threading.Thread):
 
             # Send the RREP reliably using arq_handler
             self.arq_handler.arq_broadcast_send(rrep)
-
             DATA_LOG.debug("Generated RREP: %s", str(rrep))
 
         else:
-
             DATA_LOG.info("Broadcasting RREQ further")
-
             # Change next_hop value to NODE_IP and broadcast the message further
             rreq.hop_count += 1
 
@@ -618,16 +608,13 @@ class IncomingTrafficHandler(threading.Thread):
             return None
 
         DATA_LOG.info("Processing RREQ")
-
         self.rreq_ids.append(rreq.id)
 
         # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
         self.table.update_entry(rreq.src_ip, src_mac, round(50.0 / rreq.hop_count, 2))
 
         if rreq.dst_ip in self.table.current_node_ips:
-
             DATA_LOG.info("Processing the RREQ, generating and sending back the RREP")
-
             # Generate and send RREP back to the source
             rrep = Messages.RrepMessage()
             rrep.src_ip = rreq.dst_ip
@@ -637,12 +624,10 @@ class IncomingTrafficHandler(threading.Thread):
 
             # Send the RREP reliably using arq_handler
             self.arq_handler.arq_broadcast_send(rrep)
-
             DATA_LOG.debug("Generated RREP: %s", str(rrep))
 
         # If the dst_ip is not for this node, discard the RREQ
         else:
-
             DATA_LOG.info("This RREQ is not for me. Discarding RREQ, since in Monitoring Mode.")
 
     ## Handle incoming RREP messages.
@@ -660,23 +645,18 @@ class IncomingTrafficHandler(threading.Thread):
             return None
 
         DATA_LOG.info("Processing RREP...")
-
         self.rrep_ids.append(rrep.id)
 
         # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
         self.table.update_entry(rrep.src_ip, src_mac, round(50.0 / rrep.hop_count, 2))
 
         if rrep.dst_ip in self.table.current_node_ips:
-
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
-
             # Put RREP in the processing by path_discovery_handler
             self.path_discovery_handler.process_rrep(rrep)
 
         else:
-
             DATA_LOG.info("Broadcasting RREP further")
-
             # Change next_hop value to NODE_IP and broadcast the message further
             rrep.hop_count += 1
 
@@ -703,16 +683,13 @@ class IncomingTrafficHandler(threading.Thread):
             return None
 
         DATA_LOG.info("Processing RREP...")
-
         self.rrep_ids.append(rrep.id)
 
         # Update corresponding estimation values in RouteTable for the given src_ip and mac address of the RREQ
         self.table.update_entry(rrep.src_ip, src_mac, round(50.0 / rrep.hop_count, 2))
 
         if rrep.dst_ip in self.table.current_node_ips:
-
             DATA_LOG.info("This RREP is for me. Stop the discovery procedure, send the data.")
-
             # Put RREP in the processing by path_discovery_handler
             self.path_discovery_handler.process_rrep(rrep)
 
