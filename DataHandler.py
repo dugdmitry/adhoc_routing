@@ -23,7 +23,7 @@ from collections import deque
 
 # Import the necessary modules of the program
 import routing_logging
-from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST, GW_MODE, GW_TYPE
+from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST, GW_TYPE
 
 ## @var lock
 # Store the global threading.Lock object.
@@ -90,18 +90,16 @@ class GatewayHandler:
         # Reference to PathDiscovery.PathDiscoveryHandler object.
         self.path_discovery_handler = path_discovery_handler
         ## @var check_destination_address
-        # Create a reference to the default self.check_destination_address method, depending on the GW_MODE and
-        # GW_TYPE values.
-        if GW_MODE:
-            if GW_TYPE == "local":
-                self.check_destination_address = self.check_destination_address_local
+        # Create a reference to the default self.check_destination_address method, depending on the GW_TYPE value.
+        if GW_TYPE == "local":
+            self.check_destination_address = self.check_destination_address_local
 
-            elif GW_TYPE == "public":
-                self.check_destination_address = self.check_destination_address_public
+        elif GW_TYPE == "public":
+            self.check_destination_address = self.check_destination_address_public
 
-            else:
-                # Else, set the "local" mode as the default one
-                self.check_destination_address = self.check_destination_address_local
+        else:
+            # Else, set the "local" mode as the default one
+            self.check_destination_address = self.check_destination_address_local
 
     ## Default method for checking the destination address.
     # It is being overridden in the constructor, depending on the GW_MODE and GW_TYPE values, defined in the
