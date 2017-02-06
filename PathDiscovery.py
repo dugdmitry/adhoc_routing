@@ -39,6 +39,9 @@ class PathDiscoveryHandler:
         ## @var creation_timestamps
         # Dictionary of entry creation timestamps. Format: {dst_ip: TS}.
         self.creation_timestamps = {}
+        ## @var failed_ips
+        # List of IP addresses for which the path discovery has failed to find the destination route.
+        self.failed_ips = set([])
         ## @var app_transport
         # Reference to Transport.VirtualTransport object.
         self.app_transport = app_transport
@@ -63,6 +66,8 @@ class PathDiscoveryHandler:
                 # Delete the timestamp
                 # del self.creation_timestamps[dst_ip]
                 self.creation_timestamps.pop(dst_ip, None)
+                # Add the dst_ip to the list of failed addresses
+                self.failed_ips.add(dst_ip)
                 # Run path discovery for the current packet again
                 self.run_path_discovery(src_ip, dst_ip, packet)
 
@@ -104,7 +109,6 @@ class PathDiscoveryHandler:
     # @return None
     def process_rrep(self, rrep):
         src_ip = rrep.src_ip
-
         PATH_DISCOVERY_LOG.info("Got RREP. Deleting RREQ thread...")
 
         if src_ip in self.delayed_packets_list:
@@ -114,7 +118,6 @@ class PathDiscoveryHandler:
             for packet in packets:
                 PATH_DISCOVERY_LOG.info("Putting delayed packets back to app_queue...")
                 PATH_DISCOVERY_LOG.debug("Packet dst_ip: %s", src_ip)
-
                 self.app_transport.send_to_interface(packet)
 
             # Delete the entry
@@ -123,3 +126,5 @@ class PathDiscoveryHandler:
             # Delete the timestamp
             # del self.creation_timestamps[src_ip]
             self.creation_timestamps.pop(src_ip, None)
+            # Delete dst_ip from the failed_ips list
+            self.failed_ips.discard(src_ip)

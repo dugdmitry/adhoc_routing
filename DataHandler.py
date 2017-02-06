@@ -23,7 +23,7 @@ from collections import deque
 
 # Import the necessary modules of the program
 import routing_logging
-from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST
+from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST, GW_MODE, GW_TYPE
 
 ## @var lock
 # Store the global threading.Lock object.
@@ -72,6 +72,103 @@ class DataHandler:
         DATA_LOG.info("Traffic handlers are stopped")
 
 
+## Class for parsing the destination L3 address of an incoming packet.
+# If the GW_MODE is on, the corresponding method of this class will transform the destination address to the default
+# gateway address ("0.0.0.0"), if the given packet is destined to the outside network.
+# The different "address transformation" logic is applied here, depending on the defined GW_TYPE value.
+# See more info in the documentation.
+class GatewayHandler:
+    ## Constructor.
+    # @param self The object pointer.
+    # @param path_discovery_handler Reference to PathDiscovery.PathDiscoveryHandler object.
+    # @return None
+    def __init__(self, path_discovery_handler):
+        ## @var default_address
+        # Default IP representation of the address, located outside the given network.
+        self.default_address = "0.0.0.0"
+        ## @var path_discovery_handler
+        # Reference to PathDiscovery.PathDiscoveryHandler object.
+        self.path_discovery_handler = path_discovery_handler
+        ## @var check_destination_address
+        # Create a reference to the default self.check_destination_address method, depending on the GW_MODE and
+        # GW_TYPE values.
+        if GW_MODE:
+            if GW_TYPE == "local":
+                self.check_destination_address = self.check_destination_address_local
+
+            elif GW_TYPE == "public":
+                self.check_destination_address = self.check_destination_address_public
+
+            else:
+                # Else, set the "local" mode as the default one
+                self.check_destination_address = self.check_destination_address_local
+
+    ## Default method for checking the destination address.
+    # It is being overridden in the constructor, depending on the GW_MODE and GW_TYPE values, defined in the
+    # configuration file.
+    # Input: dst_ip - destination L3 address.
+    # Output: parsed (transformed) destination L3 address.
+    # @param self The object pointer.
+    def check_destination_address(self, dst_ip):
+        return dst_ip
+
+    ## Check the destination address in the local mode.
+    # In the local mode, the destination IP address is being checked whether it belongs to public or private domain of
+    # IPv4/IPv6 addresses.
+    # @param self The object pointer.
+    # @param dst_address Destination IP address in string format.
+    # @return Destination address
+    def check_destination_address_local(self, dst_address):
+        # Check if dst_address is IPv4 or IPv6
+        if dst_address[0] == "f":
+            # Check IPv6 address
+            # Check private IPv6 addresses formats (fc00::, fd00). See RFC 4193.
+            if (dst_address[:4] == "fc00") or (dst_address[:4] == "fd00"):
+                return dst_address
+            # Check link-local IPv6 formats (fe80::). See RFC 4862.
+            elif dst_address[:4] == "fe80":
+                return dst_address
+            # Else, assume that the given IPv6 address is a public one, return default address.
+            else:
+                return self.default_address
+
+        else:
+            # Check IPv4 address
+            parsed_address = map(int, dst_address.split("."))
+            # Check for the IPv4 private domain. See RFC 1918.
+            if parsed_address[0] == 10:
+                return dst_address
+
+            elif (parsed_address[0] == 192) and (parsed_address[1] == 168):
+                return dst_address
+
+            elif (parsed_address[0] == 172) and (16 <= parsed_address[1] <= 31):
+                return dst_address
+
+            # Check for link-local IPv4 addresses. See RFC 6890.
+            elif (parsed_address[0] == 169) and (parsed_address[1] == 254):
+                return dst_address
+
+            # Else, return the default address.
+            else:
+                return self.default_address
+
+    ## Check the destination address in the public mode.
+    # In the public mode, the destination IP address is considered to be from outside network, if the path discovery
+    # procedure has failed to find the route towards inner node. In other words, if the protocol cannot find the route
+    # for the given destination address, then it will be sent to the nearest gateway node.
+    # @param self The object pointer.
+    # @param dst_address Destination IP address in string format.
+    # @return Destination address
+    def check_destination_address_public(self, dst_address):
+        # Check whether the destination address is in the list if failed path discovery queries or not
+        if dst_address in self.path_discovery_handler.failed_ips:
+            # If yes, then return the default address
+            return self.default_address
+        else:
+            return dst_address
+
+
 ## Class for handling all incoming user application data, received from the virtual network interface.
 # A starting point of message transmission.
 # It initialises all handler objects, which then will be used by IncomingTraffic thread upon receiving messages
@@ -111,6 +208,9 @@ class AppHandler:
         # Create and store a PathDiscovery.PathDiscoveryHandler object for dealing with the packets with no next hop
         # node.
         self.path_discovery_handler = PathDiscovery.PathDiscoveryHandler(app_transport, self.arq_handler)
+        ## @var gateway_handler
+        # Create and store a DataHandler.GatewayHandler object for checking the location of the destination IP address.
+        self.gateway_handler = GatewayHandler(self.path_discovery_handler)
         ## @var send_unicast_packet
         # Create a reference to the default self.send_unicast_packet method, depending on the ENABLE_ARQ value.
         if ENABLE_ARQ:
@@ -129,6 +229,9 @@ class AppHandler:
         except TypeError:
             DATA_LOG.error("The packet has UNSUPPORTED L3 protocol! Dropping the packet...")
             return 1
+
+        # Check the destination address if it's inside or outside the network
+        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
 
         # Try to find a mac address of the next hop where the packet should be forwarded to
         next_hop_mac = self.table.get_next_hop_mac(dst_ip)
@@ -291,6 +394,9 @@ class IncomingTrafficHandler(threading.Thread):
         ## @var path_discovery_handler
         # Reference to DataHandler.AppHandler.path_discovery_handler object.
         self.path_discovery_handler = app_handler_thread.path_discovery_handler
+        ## @var gateway_handler
+        # Reference to DataHandler.GatewayHandler object.
+        self.gateway_handler = app_handler_thread.gateway_handler
         ## @var listen_neighbors_handler
         # Reference to NeighborDiscovery.NeighborDiscovery.listen_neighbors_handler object.
         self.listen_neighbors_handler = neighbor_routine.listen_neighbors_handler
@@ -384,6 +490,9 @@ class IncomingTrafficHandler(threading.Thread):
         # Get src_ip, dst_ip from the incoming packet
         src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
 
+        # Check the destination address if it's inside or outside the network
+        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
+
         # Generate and send back a reward message
         self.reward_send_handler.send_reward(dst_ip, src_mac)
 
@@ -424,6 +533,9 @@ class IncomingTrafficHandler(threading.Thread):
         # Get src_ip, dst_ip from the incoming packet
         src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
 
+        # Check the destination address if it's inside or outside the network
+        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
+
         # Generate and send back a reward message
         self.reward_send_handler.send_reward(dst_ip, src_mac)
 
@@ -456,6 +568,9 @@ class IncomingTrafficHandler(threading.Thread):
 
         # Get src_ip, dst_ip from the incoming packet
         src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
+
+        # Check the destination address if it's inside or outside the network
+        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
 
         # Generate and send back a reward message
         self.reward_send_handler.send_reward(dst_ip, src_mac)
@@ -503,6 +618,9 @@ class IncomingTrafficHandler(threading.Thread):
 
         # Get src_ip, dst_ip from the incoming packet
         src_ip, dst_ip, packet = Transport.get_l3_addresses_from_packet(packet)
+
+        # Check the destination address if it's inside or outside the network
+        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
 
         # Generate and send back a reward message
         self.reward_send_handler.send_reward(dst_ip, src_mac)

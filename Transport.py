@@ -22,7 +22,7 @@ import struct
 # Import the necessary modules of the program
 import routing_logging
 import Messages
-from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG
+from conf import VIRT_IFACE_NAME, SET_TOPOLOGY_FLAG, GW_MODE
 
 ## @var TRANSPORT_LOG
 # Global routing_logging.LogWrapper object for logging Transport activity.
@@ -127,6 +127,11 @@ def get_l3_addresses_from_interface():
     addresses.append(get_ipv4_address())
     for addr in get_ipv6_address():
         addresses.append(addr)
+
+    # If the GW_MODE flag is on, then append a default "0.0.0.0" IP address to the list.
+    # In that way, the other nodes in the network will get a route for the packets with outside destination.
+    if GW_MODE:
+        addresses.append("0.0.0.0")
 
     return filter(None, addresses)
 
