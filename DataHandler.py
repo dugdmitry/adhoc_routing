@@ -233,6 +233,8 @@ class AppHandler:
         # Check the destination address if it's inside or outside the network
         dst_ip = self.gateway_handler.check_destination_address(dst_ip)
 
+        DATA_LOG.debug("!!!DST_IP!!!: %s", dst_ip)
+
         # Try to find a mac address of the next hop where the packet should be forwarded to
         next_hop_mac = self.table.get_next_hop_mac(dst_ip)
 
