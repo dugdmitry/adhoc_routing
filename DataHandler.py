@@ -231,60 +231,58 @@ class AppHandler:
             DATA_LOG.error("The packet has UNSUPPORTED L3 protocol! Dropping the packet...")
             return 1
 
-        # Check the destination address if it's inside or outside the network
-        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
-
-        # Try to find a mac address of the next hop where the packet should be forwarded to
-        next_hop_mac = self.table.get_next_hop_mac(dst_ip)
-
+        # ## Handle multicast traffic ## #
         # Check if the packet's destination address is IPv6 multicast
         # Always starts from "ff0X::",
         # see https://en.wikipedia.org/wiki/IPv6_address#Multicast_addresses
         if dst_ip[:2] == "ff":
             DATA_LOG.info("Multicast IPv6: %s", dst_ip)
-
             # Create a broadcast dsr message
             dsr_message = Messages.BroadcastPacket()
             dsr_message.broadcast_ttl = 1
             # Put the dsr broadcast id to the broadcast_list
             self.broadcast_list.append(dsr_message.id)
-
             # Broadcast it further to the network
             self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
+            return None
 
         # Check if the packet's destination address is IPv4 multicast or broadcast.
         # The IPv4 multicasts start with either 224.x.x.x or 239.x.x.x
         # See: https://en.wikipedia.org/wiki/Multicast_address#IPv4
         elif dst_ip[:3] == "224" or dst_ip[:3] == "239":
             DATA_LOG.info("Multicast IPv4: %s", dst_ip)
-
             # Create a broadcast dsr message
             dsr_message = Messages.BroadcastPacket()
             dsr_message.broadcast_ttl = 1
             # Put the dsr broadcast id to the broadcast_list
             self.broadcast_list.append(dsr_message.id)
-
             # Broadcast it further to the network
             self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
+            return None
 
         # Check if the packet's destination address is IPv4 broadcast.
         # The IPv4 broadcasts ends with .255
         # See: https://en.wikipedia.org/wiki/IP_address#Broadcast_addressing
         elif dst_ip[-3:] == "255":
             DATA_LOG.info("Broadcast IPv4: %s", dst_ip)
-
             # Create a broadcast dsr message
             dsr_message = Messages.BroadcastPacket()
             dsr_message.broadcast_ttl = 1
             # Put the dsr broadcast id to the broadcast_list
             self.broadcast_list.append(dsr_message.id)
-
             # Broadcast it further to the network
             self.raw_transport.send_raw_frame(self.broadcast_mac, dsr_message, packet)
+            return None
+
+        # ## Handle Unicast Traffic ## #
+        # Check the destination address if it's inside or outside the network
+        dst_ip = self.gateway_handler.check_destination_address(dst_ip)
+        # Try to find a mac address of the next hop where the packet should be forwarded to
+        next_hop_mac = self.table.get_next_hop_mac(dst_ip)
 
         # If next_hop_mac is None, it means that there is no current entry with dst_ip.
         # In that case, start a PathDiscovery procedure
-        elif next_hop_mac is None:
+        if next_hop_mac is None:
             DATA_LOG.info("No such Entry with given dst_ip in the table. Starting path discovery...")
             # ## Initiate PathDiscovery procedure for the given packet ## #
             self.path_discovery_handler.run_path_discovery(src_ip, dst_ip, packet)
