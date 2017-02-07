@@ -153,22 +153,32 @@ class AdvertiseNeighbor(threading.Thread):
             # Update entries in RouteTable
             self.update_ips_in_route_table(node_ips)
 
-            if node_ips:
+            # Copy the current list of ips and check for the default routes address in order to properly set
+            # the gw_mode value
+            if Messages.DEFAULT_ROUTE in node_ips:
+                self.message.gw_mode = 1
+                ips = node_ips[:-1]
+
+            else:
+                self.message.gw_mode = 0
+                ips = node_ips
+
+            if ips:
                 # Check if the node has IPv4 address assigned
                 try:
-                    inet_aton(node_ips[0])
+                    inet_aton(ips[0])
                     self.message.ipv4_count = 1
-                    self.message.ipv4_address = node_ips[0]
+                    self.message.ipv4_address = ips[0]
 
                     # If there are some IPv6 addresses in the list -> write them as well
-                    self.message.ipv6_count = len(node_ips[1:])
-                    self.message.ipv6_addresses = node_ips[1:]
+                    self.message.ipv6_count = len(ips[1:])
+                    self.message.ipv6_addresses = ips[1:]
 
                 except sock_error:
                     # Otherwise, assign IPv6 addresses
                     self.message.ipv4_count = 0
-                    self.message.ipv6_count = len(node_ips)
-                    self.message.ipv6_addresses = node_ips
+                    self.message.ipv6_count = len(ips)
+                    self.message.ipv6_addresses = ips
 
             else:
                 self.message.ipv4_count = 0
@@ -228,6 +238,10 @@ class ListenNeighbors:
         if dsr_hello_message.ipv6_count:
             for ipv6 in dsr_hello_message.ipv6_addresses:
                 l3_addresses_from_message.append(ipv6)
+
+        # Check for the gateway flag
+        if dsr_hello_message.gw_mode == 1:
+            l3_addresses_from_message.append(Messages.DEFAULT_ROUTE)
 
         # Check if the neighbor was not advertising itself for too long
         if (time.time() - self.last_expiry_check) > self.expiry_interval:

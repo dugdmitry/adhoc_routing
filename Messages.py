@@ -55,6 +55,14 @@ import struct
 import binascii
 
 
+## @var DEFAULT_ROUTE
+# Define a default address for the packets with outside destination.
+DEFAULT_ROUTE = "0.0.0.0"
+## @var DEFAULT_IPV6
+# Define a default IPv6 address in order to correctly parse the value into RREQ6/RREP6 messages.
+DEFAULT_IPV6 = "fe80::"
+
+
 # Define static functions for packing and unpacking the message object to and from the binary dsr header.
 ## Pack the Message object to dsr header. Return the byte array.
 # @param message Message object from Messages module.
@@ -296,8 +304,8 @@ class HelloMessage:
         # All possible values are:
         # 0 - no IPv6 address assigned.
         # 1 - 1 IPv6 address is assigned.
-        # 2 - 2 IPv6 address is assigned.
-        # 3 - 3 IPv6 address is assigned.
+        # 2 - 2 IPv6 addresses are assigned.
+        # 3 - 3 IPv6 addresses are assigned.
         self.ipv6_count = 0
         ## @var ipv4_address
         # IPv4 address in string representation.
@@ -311,13 +319,19 @@ class HelloMessage:
         # Number of message rebroadcast times.
         # Contains a number of times this particular Hello message has been rebroadcasted at the current moment.
         self.tx_count = 0
+        ## @var gw_mode
+        # Flag which indicates whether the node operates in the gateway mode or not.
+        # Possible values:
+        # 0 - GW_MODE is Off.
+        # 1 - GW_MODE is On.
+        self.gw_mode = 0
 
     ## Default print method.
     # @param self The object pointer.
     # @return String with "TYPE: , IPV4_ADDRESS: , IPV6_ADDRESSES: , TX_COUNT: ".
     def __str__(self):
-        out_tuple = (self.type, self.ipv4_address, self.ipv6_addresses, self.tx_count)
-        out_string = "TYPE: %s, IPV4_ADDRESS: %s, IPV6_ADDRESSES: %s, TX_COUNT: %s" % out_tuple
+        out_tuple = (self.type, self.ipv4_address, self.ipv6_addresses, self.tx_count, self.gw_mode)
+        out_string = "TYPE: %s, IPV4_ADDRESS: %s, IPV6_ADDRESSES: %s, TX_COUNT: %s, GW_MODE: %s" % out_tuple
         return out_string
 
 
@@ -423,10 +437,10 @@ class UnicastHeader:
     # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits. Total length: 32 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
-                ("TYPE", ctypes.c_uint32, 4),
-                ("ID", ctypes.c_uint32, 20),
-                ("HOP_COUNT", ctypes.c_uint32, 8)
-            ]
+            ("TYPE", ctypes.c_uint32, 4),
+            ("ID", ctypes.c_uint32, 20),
+            ("HOP_COUNT", ctypes.c_uint32, 8)
+        ]
 
     ## Constructor.
     # @param self The object pointer.
@@ -592,6 +606,11 @@ class Rreq6Header:
     def pack(self, rreq6_message):
         # Turn string representations of IP addresses into an integer form
         src_ip = int(binascii.hexlify(inet_pton(AF_INET6, rreq6_message.src_ip)), 16)
+        # Check the destination IP if it is default address or not.
+        # If yes, then change it to the corresponding IPv6 value.
+        if rreq6_message.dst_ip == DEFAULT_ROUTE:
+            rreq6_message.dst_ip = DEFAULT_IPV6
+
         dst_ip = int(binascii.hexlify(inet_pton(AF_INET6, rreq6_message.dst_ip)), 16)
         # Split each IPv6 128-bit value into four 32-bit parts
         src_ip_left_64 = (src_ip >> 64) & self.max_int64
@@ -632,6 +651,11 @@ class Rreq6Header:
 
         message.src_ip = inet_ntop(AF_INET6, src_ip_packed_value)
         message.dst_ip = inet_ntop(AF_INET6, dst_ip_packed_value)
+        # Check the destination IP if it is the default IPv6 value.
+        # If yes, then change it back to the value of the DEFAULT_ROUTE
+        if message.dst_ip == DEFAULT_IPV6:
+            message.dst_ip = DEFAULT_ROUTE
+
         # Return the message
         return message, len(bytearray(header_unpacked))
 
@@ -726,6 +750,11 @@ class Rrep6Header:
     # @return A header binary string in hex representation.
     def pack(self, rrep6_message):
         # Turn string representations of IP addresses into an integer form
+        # Check the source IP if it is default address or not.
+        # If yes, then change it to the corresponding IPv6 value.
+        if rrep6_message.src_ip == DEFAULT_ROUTE:
+            rrep6_message.src_ip = DEFAULT_IPV6
+
         src_ip = int(binascii.hexlify(inet_pton(AF_INET6, rrep6_message.src_ip)), 16)
         dst_ip = int(binascii.hexlify(inet_pton(AF_INET6, rrep6_message.dst_ip)), 16)
         # Split each IPv6 128-bit value into four 32-bit parts
@@ -767,6 +796,11 @@ class Rrep6Header:
 
         message.src_ip = inet_ntop(AF_INET6, src_ip_packed_value)
         message.dst_ip = inet_ntop(AF_INET6, dst_ip_packed_value)
+        # Check the source IP if it is the default IPv6 value.
+        # If yes, then change it back to the value of the DEFAULT_ROUTE
+        if message.src_ip == DEFAULT_IPV6:
+            message.src_ip = DEFAULT_ROUTE
+
         # Return the message
         return message, len(bytearray(header_unpacked))
 
@@ -781,7 +815,8 @@ class HelloHeader:
         _fields_ = [("TYPE", ctypes.c_uint32, 4),
                     ("IPV4_COUNT", ctypes.c_uint32, 1),
                     ("IPV6_COUNT", ctypes.c_uint32, 2),
-                    ("TX_COUNT", ctypes.c_uint32, 25)
+                    ("TX_COUNT", ctypes.c_uint32, 24),
+                    ("GW_MODE", ctypes.c_uint32, 1)
                     ]
 
     ## Hello message header structure if only IPv4 address is present.
@@ -792,7 +827,8 @@ class HelloHeader:
         _fields_ = [("TYPE", ctypes.c_uint32, 4),
                     ("IPV4_COUNT", ctypes.c_uint32, 1),
                     ("IPV6_COUNT", ctypes.c_uint32, 2),
-                    ("TX_COUNT", ctypes.c_uint32, 25),
+                    ("TX_COUNT", ctypes.c_uint32, 24),
+                    ("GW_MODE", ctypes.c_uint32, 1),
                     ("IPV4_ADDRESS", ctypes.c_uint32, 32)
                     ]
 
@@ -812,7 +848,8 @@ class HelloHeader:
     # @param hello_message The Messages.HelloMessage object.
     # @return A header binary string in hex representation.
     def pack(self, hello_message):
-        args = [hello_message.type, hello_message.ipv4_count, hello_message.ipv6_count, hello_message.tx_count]
+        args = [hello_message.type, hello_message.ipv4_count, hello_message.ipv6_count,
+                hello_message.tx_count, hello_message.gw_mode]
         # Add fields in the structure, depending on the given hello_message
         if hello_message.ipv4_count and hello_message.ipv6_count == 0:
             ipv4_address = struct.unpack("!I", inet_aton(hello_message.ipv4_address))[0]
@@ -903,6 +940,7 @@ class HelloHeader:
         # Else, create a message without ip addresses
         else:
             message.tx_count = fixed_header_unpacked.TX_COUNT
+            message.gw_mode = fixed_header_unpacked.GW_MODE
             message.ipv4_count = fixed_header_unpacked.IPV4_COUNT
             message.ipv6_count = fixed_header_unpacked.IPV6_COUNT
             # Return the message
@@ -911,6 +949,7 @@ class HelloHeader:
         message.ipv4_count = header_unpacked.IPV4_COUNT
         message.ipv6_count = header_unpacked.IPV6_COUNT
         message.tx_count = header_unpacked.TX_COUNT
+        message.gw_mode = header_unpacked.GW_MODE
 
         # Return the message
         return message, len(bytearray(header_unpacked))
@@ -1023,10 +1062,10 @@ class ReliableDataHeader:
     # TYPE: 4 bits, ID: 20 bits, HOP_COUNT: 8 bits. Total length: 32 bits.
     class Header(ctypes.LittleEndianStructure):
         _fields_ = [
-                ("TYPE", ctypes.c_uint32, 4),
-                ("ID", ctypes.c_uint32, 20),
-                ("HOP_COUNT", ctypes.c_uint32, 8)
-            ]
+            ("TYPE", ctypes.c_uint32, 4),
+            ("ID", ctypes.c_uint32, 20),
+            ("HOP_COUNT", ctypes.c_uint32, 8)
+        ]
 
     ## Constructor.
     # @param self The object pointer.

@@ -97,6 +97,9 @@ class GatewayHandler:
         elif GW_TYPE == "public":
             self.check_destination_address = self.check_destination_address_public
 
+        elif GW_TYPE == "disabled":
+            pass
+
         else:
             # Else, set the "local" mode as the default one
             self.check_destination_address = self.check_destination_address_local

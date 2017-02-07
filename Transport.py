@@ -131,7 +131,7 @@ def get_l3_addresses_from_interface():
     # If the GW_MODE flag is on, then append a default "0.0.0.0" IP address to the list.
     # In that way, the other nodes in the network will get a route for the packets with outside destination.
     if GW_MODE:
-        addresses.append("0.0.0.0")
+        addresses.append(Messages.DEFAULT_ROUTE)
 
     return filter(None, addresses)
 
