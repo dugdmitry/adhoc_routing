@@ -27,6 +27,10 @@ import time
 # Import the necessary modules of the program
 import Messages
 
+## @var lock
+# Store the global threading.Lock object.
+lock = threading.Lock()
+
 ## @var max_int32
 # 32-bit mask constant.
 max_int32 = 0xFFFFFFFF
@@ -72,7 +76,9 @@ class RewardWaitHandler:
     # @return None
     def set_reward(self, reward_message):
         if reward_message.msg_hash in self.reward_wait_list:
+            lock.acquire()
             self.reward_wait_list[reward_message.msg_hash].process_reward(reward_message.reward_value)
+            lock.release()
 
 
 ## Thread for waiting for an incoming reward messages on the given dst_ip.
@@ -122,7 +128,10 @@ class RewardWaitThread(threading.Thread):
         hash_str = hashlib.md5(self.dst_ip + self.mac).hexdigest()
         # Convert hash_str from hex to 32-bit integer
         hash_value = int(hash_str, 16) & max_int32
+
+        lock.acquire()
         del self.reward_wait_list[hash_value]
+        lock.release()
 
     ## Process an incoming reward value.
     # @param self The object pointer.
