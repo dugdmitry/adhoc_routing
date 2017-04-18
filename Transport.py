@@ -397,7 +397,7 @@ class VirtualTransport:
         # Creating virtual tun interface.
         # See the documentation: https://www.kernel.org/doc/Documentation/networking/tuntap.txt
         tun_mode = IFF_TUN
-        f = os.open("/dev/tun", os.O_RDWR)
+        f = os.open("/dev/net/tun", os.O_RDWR)
         ioctl(f, TUNSETIFF, struct.pack("16sH", VIRT_IFACE_NAME, tun_mode))
 
         self.set_mtu(VIRT_IFACE_NAME, 1400)      # !!! MTU value is fixed for now. !!!
