@@ -36,7 +36,7 @@ import routing_logging
 REDIRECT_TO = routing_logging.PATH_TO_LOGS + "crash_output.log"
 ## @var PIDFILE_PATH
 # This constant defines a string with an absolute path to the daemon's pid file.
-PIDFILE_PATH = "/var/run/routing_daemon.pid"
+PIDFILE_PATH = "/sdcard/adhoc_routing/run/routing_daemon.pid"
 # Path to a topology configuration
 ## @var ABSOLUTE_PATH
 # This constant is a string with an absolute path to the program's main directory.

@@ -25,7 +25,7 @@ from conf import LOG_LEVEL
 ABSOLUTE_PATH = os.path.dirname(os.path.abspath(__file__))
 ## @var PATH_TO_LOGS
 # Define a default path to log directory.
-PATH_TO_LOGS = "/var/log/adhoc_routing/"
+PATH_TO_LOGS = "/sdcard/adhoc_routing/log/"
 ## @var LOG_QUEUE
 # Define a global queue for receiving the methods from the Logger objects and its arguments.
 LOG_QUEUE = Queue.Queue()
