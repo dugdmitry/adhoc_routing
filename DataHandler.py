@@ -448,13 +448,19 @@ class IncomingTrafficHandler(threading.Thread):
                 DATA_LOG.debug("Got broadcast data packet: %s", str(dsr_message))
                 self.handle_broadcast_packet(dsr_message, packet)
 
-            elif dsr_type == 2 or dsr_type == 3:
-                DATA_LOG.debug("Got RREQ service message: %s", str(dsr_message))
+            elif dsr_type == 2:
+                DATA_LOG.debug("Got RREQ4 service message: %s", str(dsr_message))
                 self.handle_rreq(src_mac, dsr_message)
 
-            elif dsr_type == 4 or dsr_type == 5:
-                DATA_LOG.debug("Got RREP service message: %s", str(dsr_message))
+            elif dsr_type == 3:
+                DATA_LOG.debug("Got RREQ6 service message! Dropping the message.",)
+
+            elif dsr_type == 4:
+                DATA_LOG.debug("Got RREP4 service message: %s", str(dsr_message))
                 self.handle_rrep(src_mac, dsr_message)
+
+            elif dsr_type == 5:
+                DATA_LOG.debug("Got RREP6 service message! Dropping the message.")
 
             elif dsr_type == 6:
                 DATA_LOG.debug("Got HELLO service message: %s", str(dsr_message))

@@ -47,7 +47,7 @@ A detailed description of the fields and its functionality can be found in the d
 
 # Import necessary python modules from the standard library
 from random import randint
-from socket import AF_INET6, inet_pton, inet_aton, inet_ntoa, inet_ntop
+from socket import AF_INET6, inet_pton, inet_aton, inet_ntoa
 from socket import error as sock_error
 from math import ceil
 import ctypes
@@ -640,21 +640,27 @@ class Rreq6Header:
         message.type = header_unpacked.TYPE
         message.id = header_unpacked.ID
         message.hop_count = header_unpacked.HOP_COUNT
-        # Merge the parts of 128-bit IPv6 address together
-        src_ip_left_64 = (header_unpacked.SRC_IP1 << 32 | header_unpacked.SRC_IP2)
-        src_ip_right_64 = (header_unpacked.SRC_IP3 << 32 | header_unpacked.SRC_IP4)
-        dst_ip_left_64 = (header_unpacked.DST_IP1 << 32 | header_unpacked.DST_IP2)
-        dst_ip_right_64 = (header_unpacked.DST_IP3 << 32 | header_unpacked.DST_IP4)
+        # # Merge the parts of 128-bit IPv6 address together
+        # src_ip_left_64 = (header_unpacked.SRC_IP1 << 32 | header_unpacked.SRC_IP2)
+        # src_ip_right_64 = (header_unpacked.SRC_IP3 << 32 | header_unpacked.SRC_IP4)
+        # dst_ip_left_64 = (header_unpacked.DST_IP1 << 32 | header_unpacked.DST_IP2)
+        # dst_ip_right_64 = (header_unpacked.DST_IP3 << 32 | header_unpacked.DST_IP4)
+        #
+        # src_ip_packed_value = struct.pack(b"!QQ", src_ip_left_64, src_ip_right_64)
+        # dst_ip_packed_value = struct.pack(b"!QQ", dst_ip_left_64, dst_ip_right_64)
+        #
+        # message.src_ip = inet_ntop(AF_INET6, src_ip_packed_value)
+        # message.dst_ip = inet_ntop(AF_INET6, dst_ip_packed_value)
 
-        src_ip_packed_value = struct.pack(b"!QQ", src_ip_left_64, src_ip_right_64)
-        dst_ip_packed_value = struct.pack(b"!QQ", dst_ip_left_64, dst_ip_right_64)
+        # Set an empty string and avoid AF_INET6 ntop() processing, which is not available on Android.
+        # This message will then be filtered out by IncomingTrafficHandler thread.
+        message.src_ip = ""
+        message.dst_ip = ""
 
-        message.src_ip = inet_ntop(AF_INET6, src_ip_packed_value)
-        message.dst_ip = inet_ntop(AF_INET6, dst_ip_packed_value)
-        # Check the destination IP if it is the default IPv6 value.
-        # If yes, then change it back to the value of the DEFAULT_ROUTE
-        if message.dst_ip == DEFAULT_IPV6:
-            message.dst_ip = DEFAULT_ROUTE
+        # # Check the destination IP if it is the default IPv6 value.
+        # # If yes, then change it back to the value of the DEFAULT_ROUTE
+        # if message.dst_ip == DEFAULT_IPV6:
+        #     message.dst_ip = DEFAULT_ROUTE
 
         # Return the message
         return message, len(bytearray(header_unpacked))
@@ -785,21 +791,27 @@ class Rrep6Header:
         message.type = header_unpacked.TYPE
         message.id = header_unpacked.ID
         message.hop_count = header_unpacked.HOP_COUNT
-        # Merge the parts of 128-bit IPv6 address together
-        src_ip_left_64 = (header_unpacked.SRC_IP1 << 32 | header_unpacked.SRC_IP2)
-        src_ip_right_64 = (header_unpacked.SRC_IP3 << 32 | header_unpacked.SRC_IP4)
-        dst_ip_left_64 = (header_unpacked.DST_IP1 << 32 | header_unpacked.DST_IP2)
-        dst_ip_right_64 = (header_unpacked.DST_IP3 << 32 | header_unpacked.DST_IP4)
+        # # Merge the parts of 128-bit IPv6 address together
+        # src_ip_left_64 = (header_unpacked.SRC_IP1 << 32 | header_unpacked.SRC_IP2)
+        # src_ip_right_64 = (header_unpacked.SRC_IP3 << 32 | header_unpacked.SRC_IP4)
+        # dst_ip_left_64 = (header_unpacked.DST_IP1 << 32 | header_unpacked.DST_IP2)
+        # dst_ip_right_64 = (header_unpacked.DST_IP3 << 32 | header_unpacked.DST_IP4)
+        #
+        # src_ip_packed_value = struct.pack(b"!QQ", src_ip_left_64, src_ip_right_64)
+        # dst_ip_packed_value = struct.pack(b"!QQ", dst_ip_left_64, dst_ip_right_64)
+        #
+        # message.src_ip = inet_ntop(AF_INET6, src_ip_packed_value)
+        # message.dst_ip = inet_ntop(AF_INET6, dst_ip_packed_value)
 
-        src_ip_packed_value = struct.pack(b"!QQ", src_ip_left_64, src_ip_right_64)
-        dst_ip_packed_value = struct.pack(b"!QQ", dst_ip_left_64, dst_ip_right_64)
+        # Set an empty string and avoid AF_INET6 ntop() processing, which is not available on Android.
+        # This message will then be filtered out by IncomingTrafficHandler thread.
+        message.src_ip = ""
+        message.dst_ip = ""
 
-        message.src_ip = inet_ntop(AF_INET6, src_ip_packed_value)
-        message.dst_ip = inet_ntop(AF_INET6, dst_ip_packed_value)
-        # Check the source IP if it is the default IPv6 value.
-        # If yes, then change it back to the value of the DEFAULT_ROUTE
-        if message.src_ip == DEFAULT_IPV6:
-            message.src_ip = DEFAULT_ROUTE
+        # # Check the source IP if it is the default IPv6 value.
+        # # If yes, then change it back to the value of the DEFAULT_ROUTE
+        # if message.src_ip == DEFAULT_IPV6:
+        #     message.src_ip = DEFAULT_ROUTE
 
         # Return the message
         return message, len(bytearray(header_unpacked))
@@ -900,54 +912,23 @@ class HelloHeader:
         # Create and write to a message object
         message = HelloMessage()
 
-        # Generate the rest of the part
+        # Generate the rest of the part. Ignore IPV6_COUNT flag and skip all IPv6 addresses,
+        # since Android has no AD_INET6 ntop() function for IPv6.
         if fixed_header_unpacked.IPV4_COUNT and fixed_header_unpacked.IPV6_COUNT == 0:
             header_unpacked = self.OnlyIpv4Header.from_buffer_copy(binary_header)
             message.ipv4_address = inet_ntoa(struct.pack("!I", header_unpacked.IPV4_ADDRESS))
-
-        elif fixed_header_unpacked.IPV6_COUNT:
-
-            fields = list(self.FixedHeader._fields_)
-            if fixed_header_unpacked.IPV4_COUNT:
-                fields.append(("IPV4_ADDRESS", ctypes.c_uint32, 32))
-
-            for i in xrange(fixed_header_unpacked.IPV6_COUNT):
-                fields.append(("IPV6_ADDRESS_%s_1" % i, ctypes.c_uint32, 32))
-                fields.append(("IPV6_ADDRESS_%s_2" % i, ctypes.c_uint32, 32))
-                fields.append(("IPV6_ADDRESS_%s_3" % i, ctypes.c_uint32, 32))
-                fields.append(("IPV6_ADDRESS_%s_4" % i, ctypes.c_uint32, 32))
-
-            # Define header structure
-            class Header(ctypes.Structure):
-                _fields_ = fields
-
-            header_unpacked = Header.from_buffer_copy(binary_header)
-
-            if header_unpacked.IPV4_COUNT:
-                message.ipv4_address = inet_ntoa(struct.pack("!I", header_unpacked.IPV4_ADDRESS))
-
-            for i in xrange(header_unpacked.IPV6_COUNT):
-                # Merge the parts of 128-bit IPv6 address together
-                ipv6_left = (getattr(header_unpacked, "IPV6_ADDRESS_%s_1" % i) << 32 |
-                             getattr(header_unpacked, "IPV6_ADDRESS_%s_2" % i))
-                ipv6_right = (getattr(header_unpacked, "IPV6_ADDRESS_%s_3" % i) << 32 |
-                              getattr(header_unpacked, "IPV6_ADDRESS_%s_4" % i))
-
-                ipv6_packed_value = struct.pack(b"!QQ", ipv6_left, ipv6_right)
-
-                message.ipv6_addresses.append(inet_ntop(AF_INET6, ipv6_packed_value))
 
         # Else, create a message without ip addresses
         else:
             message.tx_count = fixed_header_unpacked.TX_COUNT
             message.gw_mode = fixed_header_unpacked.GW_MODE
             message.ipv4_count = fixed_header_unpacked.IPV4_COUNT
-            message.ipv6_count = fixed_header_unpacked.IPV6_COUNT
+            message.ipv6_count = 0
             # Return the message
             return message, len(bytearray(fixed_header_unpacked))
 
         message.ipv4_count = header_unpacked.IPV4_COUNT
-        message.ipv6_count = header_unpacked.IPV6_COUNT
+        message.ipv6_count = 0
         message.tx_count = header_unpacked.TX_COUNT
         message.gw_mode = header_unpacked.GW_MODE
 
