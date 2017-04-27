@@ -18,7 +18,6 @@ Currently, the following command IDs are supported:
 
 # Import necessary python modules from the standard library
 import threading
-import subprocess
 import socket
 import pickle
 import os
@@ -45,7 +44,9 @@ class Manager(threading.Thread):
         # Create file descriptor for forwarding all the output to /dev/null from subprocess calls.
         self.FNULL = open(os.devnull, "w")
         # Delete the previous uds_socket if it still exists on this address.
-        subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)
+        # subprocess.call("rm %s" % self.server_address, shell=True, stdout=self.FNULL, stderr=subprocess.STDOUT)
+        if os.path.exists(self.server_address):
+            os.remove(self.server_address)
         ## @var sock
         # Create a UDS socket.
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
