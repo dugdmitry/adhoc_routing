@@ -10,4 +10,4 @@ GW_TYPE = "local"
 # in a format: {protocol_name: [port_numbers]}.
 # "0" port number corresponds to the upper protocols, which don't use ports, e.g. ICMP
 ENABLE_ARQ = True
-ARQ_LIST = {"TCP": [22], "UDP": [30000, 30001], "ICMP6": [0], "ICMP4": [0]}
+ARQ_LIST = {"TCP": [22], "UDP": [30000], "ICMP6": [0], "ICMP4": [0]}
