@@ -75,9 +75,15 @@ class RewardWaitHandler:
     # @param reward_message Messages.RewardMessage object.
     # @return None
     def set_reward(self, reward_message):
-        if reward_message.msg_hash in self.reward_wait_list:
-            lock.acquire()
+        lock.acquire()
+        try:
             self.reward_wait_list[reward_message.msg_hash].process_reward(reward_message.reward_value)
+
+        # If the key is not present, then pass
+        except KeyError:
+            pass
+
+        finally:
             lock.release()
 
 
@@ -130,8 +136,15 @@ class RewardWaitThread(threading.Thread):
         hash_value = int(hash_str, 16) & max_int32
 
         lock.acquire()
-        del self.reward_wait_list[hash_value]
-        lock.release()
+        try:
+            del self.reward_wait_list[hash_value]
+
+        # If key is not present, then pass
+        except KeyError:
+            pass
+
+        finally:
+            lock.release()
 
     ## Process an incoming reward value.
     # @param self The object pointer.
