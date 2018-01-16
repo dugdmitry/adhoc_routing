@@ -23,7 +23,7 @@ from collections import deque
 
 # Import the necessary modules of the program
 import routing_logging
-from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST, GW_TYPE
+from conf import MONITORING_MODE_FLAG, ENABLE_ARQ, ARQ_LIST, GW_TYPE, DEFAULT_IPS
 
 ## @var lock
 # Store the global threading.Lock object.
@@ -120,6 +120,11 @@ class GatewayHandler:
     # @param dst_address Destination IP address in string format.
     # @return Destination address
     def check_destination_address_local(self, dst_address):
+        # Check if the dst_address is in the list of DEFAULT_IPS
+        # If yes, then return the default GW address in order to forward the packet to the GW node
+        if dst_address in DEFAULT_IPS:
+            return self.default_address
+
         # Check if dst_address is IPv4 or IPv6
         if dst_address[0] == "f":
             # Check IPv6 address
@@ -162,6 +167,11 @@ class GatewayHandler:
     # @param dst_address Destination IP address in string format.
     # @return Destination address
     def check_destination_address_public(self, dst_address):
+        # Check if the dst_address is in the list of DEFAULT_IPS
+        # If yes, then return the default GW address in order to forward the packet to the GW node
+        if dst_address in DEFAULT_IPS:
+            return self.default_address
+
         # Check whether the destination address is in the list if failed path discovery queries or not
         if dst_address in self.path_discovery_handler.failed_ips:
             # If yes, then return the default address
