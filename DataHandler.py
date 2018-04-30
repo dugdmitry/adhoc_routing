@@ -327,10 +327,10 @@ class AppHandler:
     # @return None
     def send_packet_with_arq(self, packet, dst_ip, next_hop_mac):
         # Check if the packet should be transmitted reliably
-        upper_proto, port_number = Transport.get_upper_proto_info(packet)
-        if (upper_proto in ARQ_LIST) and (port_number in ARQ_LIST[upper_proto]):
+        upper_proto, src_port, dst_port = Transport.get_upper_proto_info(packet)
+        if (upper_proto in ARQ_LIST) and (src_port in ARQ_LIST[upper_proto] or dst_port in ARQ_LIST[upper_proto]):
             # Transmit the packet reliably
-            DATA_LOG.debug("This packet should be transmitted reliably: %s, %s", upper_proto, port_number)
+            DATA_LOG.debug("This packet should be transmitted reliably: %s, %s, %s", upper_proto, src_port, dst_port)
             # Create reliable dsr data message with proper values
             dsr_message = Messages.ReliableDataPacket()
             dsr_message.hop_count = 1

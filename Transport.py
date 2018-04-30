@@ -199,7 +199,7 @@ def get_l3_addresses_from_packet(packet):
 # Define a static function which will return upper protocol ID and port number (if any) of the given packet.
 # For now, only IPv4 and IPv6 protocols are supported on L3 layer, and UDP, TCP and ICMP on the upper level.
 # @param packet Raw data packet received from network interface.
-# @return (L4 protocol name), (port number).
+# @return (L4 protocol name), (source port number), (destination port number).
 def get_upper_proto_info(packet):
     def get_proto_id_from_ipv4(ipv4_packet):
         return struct.unpack("!B", ipv4_packet[13])[0]
@@ -208,12 +208,20 @@ def get_upper_proto_info(packet):
         return struct.unpack("!B", ipv6_packet[10])[0]
 
     # Gets "upper_data" - a sliced packet without L3 header - outputs a destination port number of UDP
-    def get_port_from_udp(udp_upper_data):
+    def get_dst_port_from_udp(udp_upper_data):
         return struct.unpack("!H", udp_upper_data[2:4])[0]
 
     # Gets "upper_data" - a sliced packet without L3 header - outputs a destination port number of TCP
-    def get_port_from_tcp(tcp_upper_data):
+    def get_dst_port_from_tcp(tcp_upper_data):
         return struct.unpack("!H", tcp_upper_data[2:4])[0]
+
+    # Gets "upper_data" - a sliced packet without L3 header - outputs a source port number of UDP
+    def get_src_port_from_udp(udp_upper_data):
+        return struct.unpack("!H", udp_upper_data[0:2])[0]
+
+    # Gets "upper_data" - a sliced packet without L3 header - outputs a source port number of TCP
+    def get_src_port_from_tcp(tcp_upper_data):
+        return struct.unpack("!H", tcp_upper_data[0:2])[0]
 
     # Get L3 protocol identifier. This is the L3 ID which is being prepended to every packet,
     # sent to virtual tun interface (packet information flag, IFF_NO_PI set to False, by default).
@@ -227,22 +235,22 @@ def get_upper_proto_info(packet):
             # Get the IHL value in order to slice the packet from the IPv4 header
             ihl = int(struct.unpack("!B", packet[4])[0]) & 0xf
             upper_data = packet[4 + ihl * 4:]
-            return "UDP", int(get_port_from_udp(upper_data))
+            return "UDP", int(get_src_port_from_udp(upper_data)), int(get_dst_port_from_udp(upper_data))
 
         elif proto_id == PROTOCOL_IDS["TCP"]:
             # Get the IHL value in order to slice the packet from the IPv4 header
             ihl = int(struct.unpack("!B", packet[4])[0]) & 0xf
             upper_data = packet[4 + ihl * 4:]
-            return "TCP", int(get_port_from_tcp(upper_data))
+            return "TCP", int(get_src_port_from_tcp(upper_data)), int(get_dst_port_from_tcp(upper_data))
 
         elif proto_id == PROTOCOL_IDS["ICMP4"]:
             # Return 0 as port number
-            return "ICMP4", 0
+            return "ICMP4", 0, 0
 
         else:
             # Unknown protocol id, return 0 as port number
             TRANSPORT_LOG.warning("Unknown upper protocol id: %s", proto_id)
-            return "UNKNOWN", 0
+            return "UNKNOWN", 0, 0
 
     elif l3_id == int(IP6_ID):
         proto_id = int(get_proto_id_from_ipv6(packet))
@@ -251,22 +259,22 @@ def get_upper_proto_info(packet):
             # IHL value in IPv6 is fixed and equal to 40 octets (10 x 32-bit words)
             ihl = 10
             upper_data = packet[4 + ihl * 4:]
-            return "UDP", int(get_port_from_udp(upper_data))
+            return "UDP", int(get_src_port_from_udp(upper_data)), int(get_dst_port_from_udp(upper_data))
 
         elif proto_id == PROTOCOL_IDS["TCP"]:
             # IHL value in IPv6 is fixed and equal to 40 octets (10 x 32-bit words)
             ihl = 10
             upper_data = packet[4 + ihl * 4:]
-            return "TCP", int(get_port_from_tcp(upper_data))
+            return "TCP", int(get_src_port_from_tcp(upper_data)), int(get_dst_port_from_tcp(upper_data))
 
         elif proto_id == PROTOCOL_IDS["ICMP6"]:
             # Return 0 as port number
-            return "ICMP6", 0
+            return "ICMP6", 0, 0
 
         else:
             # Unknown protocol id, return 0 as port number
             TRANSPORT_LOG.warning("Unknown upper protocol id: %s", proto_id)
-            return "UNKNOWN", 0
+            return "UNKNOWN", 0, 0
 
     # If the ID is 0, it means that the packet has been sent back to tun interface again, using raw socket.
     # So, the tun driver set the ID to 0, since it was the pure raw data, sent via raw socket.
