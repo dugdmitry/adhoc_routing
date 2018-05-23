@@ -17,9 +17,9 @@ import copy
 import rl_logic
 import routing_logging
 
-## @var ABSOLUTE_PATH
-# This constant stores a string with an absolute path to the program's main directory.
-ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
+## @var PATH_TO_LOGS
+# This constant stores a string with an absolute path to log files directory.
+PATH_TO_LOGS = routing_logging.PATH_TO_LOGS
 
 ## @var TABLE_LOG
 # Global routing_logging.LogWrapper object for logging RouteTable activity.
@@ -105,7 +105,7 @@ class Table:
     def __init__(self, node_mac):
         ## @var table_filename
         # Define a filename to write the table entries to. Default filename is "table.txt".
-        self.table_filename = "/table.txt"
+        self.table_filename = "table.txt"
         ## @var node_mac
         # MAC address of the node's network interface.
         self.node_mac = node_mac
@@ -239,7 +239,7 @@ class Table:
     def print_table(self):
         current_entries_list = self.get_list_of_entries()
 
-        f = open(ABSOLUTE_PATH + self.table_filename, "w")
+        f = open(PATH_TO_LOGS + self.table_filename, "w")
         f.write("-" * 90 + "\n")
 
         for dst_ip in current_entries_list:

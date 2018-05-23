@@ -24,9 +24,9 @@ from socket import error as sock_error
 # Import the necessary modules of the program
 import routing_logging
 
-## @var ABSOLUTE_PATH
-# This constant stores a string with an absolute path to the program's main directory.
-ABSOLUTE_PATH = routing_logging.ABSOLUTE_PATH
+## @var PATH_TO_LOGS
+# This constant stores a string with an absolute path to log files directory.
+PATH_TO_LOGS = routing_logging.PATH_TO_LOGS
 ## @var NEIGHBOR_LOG
 # Global routing_logging.LogWrapper object for logging NeighborDiscovery activity.
 NEIGHBOR_LOG = routing_logging.create_routing_log("routing.neighbor_discovery.log", "neighbor_discovery")
@@ -59,7 +59,7 @@ class NeighborDiscovery:
     # @return None
     def __init__(self, raw_transport_obj, table_obj):
         # Create initial empty neighbors file
-        f = open(ABSOLUTE_PATH + "/neighbors_file", "w")
+        f = open(PATH_TO_LOGS + "neighbors_file", "w")
         f.close()
         # Create listening and advertising threads
         ## @var listen_neighbors_handler
@@ -281,7 +281,7 @@ class ListenNeighbors:
     # @param self The object pointer.
     # @return None
     def update_neighbors_file(self):
-        f = open(ABSOLUTE_PATH + "/neighbors_file", "w")
+        f = open(PATH_TO_LOGS + "neighbors_file", "w")
         for mac in self.neighbors_list:
 
             NEIGHBOR_LOG.debug("Neighbor's IPs: %s", str(self.neighbors_list[mac].l3_addresses))
