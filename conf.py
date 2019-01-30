@@ -1,4 +1,5 @@
-DEV = "wlan0"
+# List of L2 network interfaces to send and receive data frames
+DEV = ["wlan0", "tap0"]
 VIRT_IFACE_NAME = "adhoc0"
 LOG_LEVEL = "DEBUG"
 SET_TOPOLOGY_FLAG = False

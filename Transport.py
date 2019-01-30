@@ -18,6 +18,7 @@ import subprocess
 import os
 from fcntl import ioctl
 import struct
+import select
 
 # Import the necessary modules of the program
 import routing_logging
@@ -79,7 +80,8 @@ PROTOCOL_IDS = {"ICMP4": 1, "ICMP6": 58, "TCP": 6, "UDP": 17}
 def get_mac(interface_name):
     # Return the MAC address of interface
     try:
-        string = open('/sys/class/net/%s/address' % interface_name).readline()
+        # Get first available MAC address from DEV list
+        string = open('/sys/class/net/%s/address' % interface_name[0]).readline()
     except IOError:
         string = "00:00:00:00:00:00"
     return string[:17]
@@ -473,8 +475,14 @@ class RawTransport:
         # Create a send raw socket.
         # Type 0x7777 corresponds to the chosen "protocol_type" in our custom ethernet frame.
         # In this way, the socket can only receive packets with 0x7777 protocol type.
-        self.send_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
-        self.send_socket.bind((dev, 0x7777))
+        self.send_socket_list = []
+        self.recv_socket_list = []
+        for device in dev:
+            send_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+            send_socket.bind((device, 0x7777))
+            self.send_socket_list.append(send_socket)
+            recv_socket = send_socket
+            self.recv_socket_list.append(recv_socket)
         ## @var proto
         # Custom protocol ID on L2 layer.
         self.proto = [0x77, 0x77]
@@ -490,9 +498,9 @@ class RawTransport:
         ## @var running
         # Thread running state bool() flag.
         self.running = True
-        ## @var recv_socket
-        # For receiving incoming raw frames.
-        self.recv_socket = self.send_socket
+        # ## @var recv_socket
+        # # For receiving incoming raw frames.
+        # self.recv_socket = self.send_socket
         ## @var recv_data
         # Define which RawTransport.recv_data method will be used, depending on the SET_TOPOLOGY_FLAG flag value.
         if SET_TOPOLOGY_FLAG:
@@ -514,11 +522,17 @@ class RawTransport:
     # @param dsr_message Message object from Messages module.
     # @param payload User/Service payload after the protocol's header.
     # @return None
+    # def send_raw_frame(self, dst_mac, dsr_message, payload):
+    #     eth_header = self.gen_eth_header(self.node_mac, dst_mac)
+    #     # Pack the initial dsr_message object and get the dsr_binary_header from it
+    #     dsr_bin_header = Messages.pack_message(dsr_message)
+    #     self.send_socket.send(eth_header + dsr_bin_header + payload)
     def send_raw_frame(self, dst_mac, dsr_message, payload):
         eth_header = self.gen_eth_header(self.node_mac, dst_mac)
         # Pack the initial dsr_message object and get the dsr_binary_header from it
         dsr_bin_header = Messages.pack_message(dsr_message)
-        self.send_socket.send(eth_header + dsr_bin_header + payload)
+        for send_socket in self.send_socket_list:
+            send_socket.send(eth_header + dsr_bin_header + payload)
 
     ## Generate ethernet header.
     # @param self The object pointer.
@@ -535,10 +549,47 @@ class RawTransport:
     # which are not in the RawTransport.topology_neighbors list.
     # @param self The object pointer.
     # @return [src_mac, dsr_header_obj, upper_raw_data].
+    # def recv_data_with_filter(self):
+    #     while self.running:
+    #         # Receive raw frame from the interface
+    #         data = self.recv_socket.recv(65535)
+    #
+    #         # ## Filtering the mac addresses according to the given topology ## #
+    #         # Get a src_mac address from the frame
+    #         src_mac = self.get_src_mac(data[:14])
+    #
+    #         # Check if the mac in the list of topology_neighbors. If not - just drop it.
+    #         if src_mac in self.topology_neighbors:
+    #             # Get and return dsr_header object and upper layer raw data
+    #             # Create dsr_header object
+    #             TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
+    #
+    #             # 56 bytes is the maximum possible length of DSR header.
+    #             # Skip first 14 bytes since this is Ethernet header fields.
+    #             dsr_header_obj, dsr_header_length = Messages.unpack_message(data[14: 14 + 56])
+    #
+    #             # Get upper raw data
+    #             upper_raw_data = data[(14 + dsr_header_length):]
+    #
+    #             return src_mac, dsr_header_obj, upper_raw_data
+    #
+    #         elif src_mac == self.node_mac:
+    #             TRANSPORT_LOG.debug("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
+    #
+    #         # Else, do nothing with the received frame
+    #         else:
+    #             TRANSPORT_LOG.debug("!!! THIS MAC HAS BEEN FILTERED !!! %s", src_mac)
     def recv_data_with_filter(self):
         while self.running:
             # Receive raw frame from the interface
-            data = self.recv_socket.recv(65535)
+            ([ready_to_read], [ready_to_write], [has_errors]) = select.select(self.recv_socket_list, [], [])
+
+            data = None
+            for sock in ready_to_read:
+                data = sock.recv(65535)
+
+            if data is None:
+                continue
 
             # ## Filtering the mac addresses according to the given topology ## #
             # Get a src_mac address from the frame
@@ -571,10 +622,42 @@ class RawTransport:
     # filtering.
     # @param self The object pointer.
     # @return [src_mac, dsr_header_obj, upper_raw_data].
+    # def recv_data_no_filter(self):
+    #     while self.running:
+    #         # Receive raw frame from the interface
+    #         data = self.recv_socket.recv(65535)
+    #
+    #         # Get a src_mac address from the frame
+    #         src_mac = self.get_src_mac(data[:14])
+    #
+    #         if src_mac == self.node_mac:
+    #             # This situation normally is not supposed to happen.
+    #             # Otherwise, it would mean that there are two or more nodes with the same MAC address, which is bad.
+    #             TRANSPORT_LOG.error("!!! THIS IS MY OWN MAC, YOBBA !!! %s", src_mac)
+    #
+    #         # Else, return the data
+    #         else:
+    #             # Get and return dsr_header object and upper layer raw data
+    #             # Create dsr_header object
+    #             TRANSPORT_LOG.debug("SRC_MAC from the received frame: %s", src_mac)
+    #             # Skip first 14 bytes since this is Ethernet header fields.
+    #             dsr_header_obj, dsr_header_length = Messages.unpack_message(data[14: 14 + 56])
+    #
+    #             # Get upper raw data
+    #             upper_raw_data = data[(14 + dsr_header_length):]
+    #
+    #             return src_mac, dsr_header_obj, upper_raw_data
     def recv_data_no_filter(self):
         while self.running:
             # Receive raw frame from the interface
-            data = self.recv_socket.recv(65535)
+            ([ready_to_read], [ready_to_write], [has_errors]) = select.select(self.recv_socket_list, [], [])
+
+            data = None
+            for sock in ready_to_read:
+                data = sock.recv(65535)
+
+            if data is None:
+                continue
 
             # Get a src_mac address from the frame
             src_mac = self.get_src_mac(data[:14])
@@ -616,7 +699,12 @@ class RawTransport:
     ## Stop reading from the receiving socket and close it.
     # @param self The object pointer.
     # @return None
+    # def close_raw_recv_socket(self):
+    #     self.running = False
+    #     self.recv_socket.close()
+    #     TRANSPORT_LOG.info("Raw socket closed")
     def close_raw_recv_socket(self):
         self.running = False
-        self.recv_socket.close()
+        for recv_socket in self.recv_socket_list:
+            recv_socket.close()
         TRANSPORT_LOG.info("Raw socket closed")
